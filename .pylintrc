@@ -1,0 +1,12 @@
+[MAIN]
+load-plugins=pylint.extensions.docparams
+ignore-paths=.*/tests/.*
+
+[FORMAT]
+max-line-length=120
+
+[VARIABLES]
+init-import=yes
+
+[SIMILARITIES]
+min-similarity-lines=10
