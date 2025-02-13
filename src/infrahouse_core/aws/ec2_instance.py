@@ -41,6 +41,35 @@ class EC2Instance:
         return self._instance_id
 
     @property
+    def hostname(self):
+        """
+        :return: Instance's private hostname.
+        """
+        return self.private_dns_name.split(".")[0]
+
+    @property
+    def private_dns_name(self):
+        """
+        :return: Instance's private DNS name.
+        """
+        print(self._describe_instance)
+        return self._describe_instance["PrivateDnsName"]
+
+    @property
+    def private_ip(self):
+        """
+        :return: Instance's private IP address
+        """
+        return self._describe_instance["PrivateIpAddress"]
+
+    @property
+    def public_ip(self):
+        """
+        :return: Instance's public IP address
+        """
+        return self._describe_instance["PublicIpAddress"]
+
+    @property
     def state(self) -> str:
         """
         :return: EC2 instance state e.g. ``Running``, ``Terminated``, etc.
