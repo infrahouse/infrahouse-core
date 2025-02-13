@@ -9,7 +9,7 @@ name = "infrahouse-core"
 version = "0.1.0"
 description = "Lightweight Python library with AWS and other general purpose classes."
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 authors = [
   {name = "InfraHouse Inc.", email = "aleks@infrahouse.com"}
 ]
