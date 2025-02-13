@@ -1,0 +1,69 @@
+[build-system]
+requires = [
+    "setuptools ~=75.8"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infrahouse-core"
+version = "0.1.0"
+description = "Lightweight Python library with AWS and other general purpose classes."
+readme = "README.rst"
+requires-python = ">=3.8"
+authors = [
+  {name = "InfraHouse Inc.", email = "aleks@infrahouse.com"}
+]
+maintainers = [
+  {name = "Oleksandr Kuzminskyi", email = "aleks@infrahouse.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "License :: OSI Approved :: Apache Software License",
+]
+license = {text = "Apache Software License 2.0"}
+dependencies = [
+    "boto3 ~= 1.36",
+    "cached-property ~= 2.0",
+    "diskcache ~= 5.6",
+    "ec2-metadata ~= 2.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black ~= 24.10",
+    "mdformat ~= 0.7",
+    "pytest ~= 8.3",
+    "pytest-cov ~= 6.0",
+    "pylint ~= 3.3",
+    "Sphinx ~= 8.1"
+]
+
+[project.urls]
+
+bugs = "https://github.com/infrahouse/infrahouse-core/issues"
+changelog = "https://github.com/infrahouse/infrahouse-core/commits/main/"
+homepage = "https://github.com/infrahouse/infrahouse-core"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"*" = ["*.*"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
