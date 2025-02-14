@@ -118,3 +118,64 @@ def test_private_hostname():
         instance = EC2Instance(instance_id="i-0193c1708ae96e8a3")
         assert instance.hostname == "ip-10-1-100-198"
         assert instance.tags["PrivateIpAddress"] == "10.1.100.198"
+
+
+def test_hostname_none():
+    mock_response = {
+        "Architecture": "x86_64",
+        "BlockDeviceMappings": [],
+        "ClientToken": "c9965413-d911-013c-44e6-85db4c6f3e22",
+        "EbsOptimized": False,
+        "EnaSupport": True,
+        "Hypervisor": "xen",
+        "NetworkInterfaces": [],
+        "RootDeviceName": "/dev/sda1",
+        "RootDeviceType": "ebs",
+        "SecurityGroups": [],
+        "StateReason": {
+            "Code": "Client.UserInitiatedShutdown",
+            "Message": "Client.UserInitiatedShutdown: User initiated shutdown",
+        },
+        "Tags": [
+            {"Key": "aws:autoscaling:groupName", "Value": "update-dns-ZR0yIRGnkLo77JbMxA1ZCbBTrZw3wv42"},
+            {"Key": "aws:ec2launchtemplate:version", "Value": "1"},
+            {"Key": "aws:ec2launchtemplate:id", "Value": "lt-09d595e001d05cec5"},
+            {"Key": "update-dns-rule", "Value": "_PrivateDnsName_"},
+        ],
+        "VirtualizationType": "hvm",
+        "CpuOptions": {"CoreCount": 1, "ThreadsPerCore": 2},
+        "CapacityReservationSpecification": {"CapacityReservationPreference": "open"},
+        "HibernationOptions": {"Configured": False},
+        "MetadataOptions": {
+            "State": "pending",
+            "HttpTokens": "optional",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled",
+            "HttpProtocolIpv6": "disabled",
+            "InstanceMetadataTags": "disabled",
+        },
+        "EnclaveOptions": {"Enabled": False},
+        "BootMode": "uefi-preferred",
+        "PlatformDetails": "Linux/UNIX",
+        "UsageOperation": "RunInstances",
+        "MaintenanceOptions": {"AutoRecovery": "default"},
+        "CurrentInstanceBootMode": "uefi",
+        "NetworkPerformanceOptions": {"BandwidthWeighting": "default"},
+        "Operator": {"Managed": False},
+        "InstanceId": "i-07542dd0efab4b51a",
+        "ImageId": "ami-0e1bed4f06a3b463d",
+        "State": {"Code": 48, "Name": "terminated"},
+        "PrivateDnsName": "",
+        "PublicDnsName": "",
+        "StateTransitionReason": "User initiated (2025-02-14 16:34:34 GMT)",
+        "AmiLaunchIndex": 0,
+        "ProductCodes": [],
+        "InstanceType": "t3.micro",
+        "Placement": {"GroupName": "", "Tenancy": "default", "AvailabilityZone": "us-east-1f"},
+        "Monitoring": {"State": "disabled"},
+    }
+    with mock.patch.object(
+        EC2Instance, "_describe_instance", new_callable=mock.PropertyMock, return_value=mock_response
+    ):
+        instance = EC2Instance(instance_id="i-07542dd0efab4b51a")
+        assert instance.hostname is None
