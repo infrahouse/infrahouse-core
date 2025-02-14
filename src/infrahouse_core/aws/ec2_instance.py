@@ -45,14 +45,13 @@ class EC2Instance:
         """
         :return: Instance's private hostname.
         """
-        return self.private_dns_name.split(".")[0]
+        return self.private_dns_name.split(".")[0] if self.private_dns_name else None
 
     @property
     def private_dns_name(self):
         """
         :return: Instance's private DNS name.
         """
-        print(self._describe_instance)
         return self._describe_instance["PrivateDnsName"]
 
     @property
