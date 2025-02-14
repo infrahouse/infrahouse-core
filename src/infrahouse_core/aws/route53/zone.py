@@ -161,7 +161,7 @@ class Zone:
         response = self._client.list_resource_record_sets(
             HostedZoneId=self.zone_id, StartRecordName=full_name, StartRecordType="A", MaxItems="1"
         )
-        if response["ResourceRecordSets"][0]["Name"] == full_name:
+        if response["ResourceRecordSets"] and response["ResourceRecordSets"][0]["Name"] == full_name:
             return [i["Value"] for i in response["ResourceRecordSets"][0]["ResourceRecords"]]
 
         raise IHRecordNotFound(f"A record {full_name} not found")

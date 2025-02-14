@@ -326,3 +326,18 @@ def test_delete_non_existing_record():
         zone = Zone(zone_name="foo.com")
         zone.delete_record("foo", "10.1.1.2")
         mock_client.change_resource_record_sets.assert_not_called()
+
+
+def test_search_hostname_new():
+    # zone = Zone(zone_name="ci-cd.infrahouse.com")
+    # assert zone.search_hostname("ip-10-1-102-189") == ["10.1.100.243"]
+    mock_response = {"ResourceRecordSets": [], "IsTruncated": False, "MaxItems": "1"}
+    mock_client = mock.Mock()
+    mock_client.list_resource_record_sets.return_value = mock_response
+    with (
+        mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client),
+        mock.patch.object(Zone, "zone_id", new_callable=mock.PropertyMock, return_value="foo_id"),
+    ):
+        zone = Zone(zone_name="foo.com")
+        with pytest.raises(IHRecordNotFound):
+            zone.search_hostname("ip-10-1-102-189")
