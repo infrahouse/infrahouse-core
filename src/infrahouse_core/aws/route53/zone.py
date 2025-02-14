@@ -2,10 +2,13 @@
 Module for a Route53 zone
 """
 
+import logging
 from typing import List
 
 from infrahouse_core.aws import get_client
 from infrahouse_core.aws.route53.exceptions import IHRecordNotFound, IHZoneNotFound
+
+LOG = logging.getLogger(__name__)
 
 
 class Zone:
@@ -142,6 +145,14 @@ class Zone:
                             }
                         ]
                     },
+                )
+            else:
+                LOG.warning(
+                    "Could not find A record in zone %s(%s) with hostname %s and IP address %s.",
+                    self.zone_name,
+                    self.zone_id,
+                    hostname,
+                    ip_address,
                 )
 
     def search_hostname(self, hostname) -> List[str]:
