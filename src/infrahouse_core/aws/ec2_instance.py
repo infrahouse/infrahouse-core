@@ -83,6 +83,20 @@ class EC2Instance:
         """
         return {tag["Key"]: tag["Value"] for tag in self._describe_instance["Tags"]}
 
+    def add_tag(self, key: str, value: str):
+        """Add a tag to the instance."""
+        self._ec2_client.create_tags(
+            Resources=[
+                self.instance_id,
+            ],
+            Tags=[
+                {
+                    "Key": key,
+                    "Value": value,
+                },
+            ],
+        )
+
     @property
     def _ec2_client(self):
         return get_client("ec2")
