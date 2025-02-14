@@ -9,7 +9,7 @@ from time import sleep, time
 import boto3
 from botocore.exceptions import ClientError
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 class DynamoDBTable:
@@ -18,8 +18,9 @@ class DynamoDBTable:
     :type table_name: str
     """
 
-    def __init__(self, table_name: str):
+    def __init__(self, table_name: str, region: str = None):
         self._table_name = table_name
+        self._region = region
         self.__table = None
 
     def delete_item(self, **kwargs):
@@ -74,6 +75,6 @@ class DynamoDBTable:
 
     def _table(self):
         if self.__table is None:
-            self.__table = boto3.resource("dynamodb").Table(self._table_name)
+            self.__table = boto3.resource("dynamodb", region_name=self._region).Table(self._table_name)
 
         return self.__table

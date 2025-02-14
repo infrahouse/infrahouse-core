@@ -41,7 +41,7 @@ class ASGInstance(EC2Instance):
 
     @property
     def _autoscaling_client(self):
-        return get_client("autoscaling")
+        return get_client("autoscaling", region=self._region)
 
     @cached_property_with_ttl(ttl=10)
     def _describe_auto_scaling_instance(self):

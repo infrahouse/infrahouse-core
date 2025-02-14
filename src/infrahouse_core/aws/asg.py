@@ -16,8 +16,9 @@ LOG = getLogger()
 class ASG:
     """AWS Autoscaling group."""
 
-    def __init__(self, asg_name: str):
+    def __init__(self, asg_name: str, region: str = None):
         self._asg_name = asg_name
+        self._region = region
 
     @property
     def instance_refreshes(self) -> List[Dict]:
@@ -70,7 +71,7 @@ class ASG:
 
     @property
     def _autoscaling_client(self):
-        return get_client("autoscaling")
+        return get_client("autoscaling", region=self._region)
 
     @property
     def _describe_auto_scaling_groups(self):
