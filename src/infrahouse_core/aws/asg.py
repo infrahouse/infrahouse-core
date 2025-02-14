@@ -35,7 +35,7 @@ class ASG:
         :return: List of EC2 instances in the autoscaling group.
         """
         return [
-            ASGInstance(instance_id=instance["InstanceId"])
+            ASGInstance(instance_id=instance["InstanceId"], region=self._region)
             for instance in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Instances"]
         ]
 
