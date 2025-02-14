@@ -20,8 +20,9 @@ class EC2Instance:
     :type instance_id: str
     """
 
-    def __init__(self, instance_id: str = None):
+    def __init__(self, instance_id: str = None, region: str = None):
         self._instance_id = instance_id
+        self._region = region
 
     @property
     def availability_zone(self) -> str:
@@ -98,7 +99,7 @@ class EC2Instance:
 
     @property
     def _ec2_client(self):
-        return get_client("ec2")
+        return get_client("ec2", region=self._region)
 
     @cached_property_with_ttl(ttl=10)
     def _describe_instance(self):
