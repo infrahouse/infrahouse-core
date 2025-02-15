@@ -108,34 +108,16 @@ class Zone:
         """
         Delete an A record that matches hostname and ip_address.
         """
-        ip_list = self.search_hostname(hostname)
-        if ip_list == [ip_address]:
-            # the last IP address in the record
-            self._client.change_resource_record_sets(
-                HostedZoneId=self.zone_id,
-                ChangeBatch={
-                    "Changes": [
-                        {
-                            "Action": "DELETE",
-                            "ResourceRecordSet": {
-                                "Name": f"{hostname}.{self.zone_name}",
-                                "Type": "A",
-                                "TTL": self._get_record_ttl(hostname),
-                                "ResourceRecords": [{"Value": ip} for ip in ip_list],
-                            },
-                        }
-                    ]
-                },
-            )
-        else:
-            if ip_address in ip_list:
-                ip_list.remove(ip_address)
+        try:
+            ip_list = self.search_hostname(hostname)
+            if ip_list == [ip_address]:
+                # the last IP address in the record
                 self._client.change_resource_record_sets(
                     HostedZoneId=self.zone_id,
                     ChangeBatch={
                         "Changes": [
                             {
-                                "Action": "UPSERT",
+                                "Action": "DELETE",
                                 "ResourceRecordSet": {
                                     "Name": f"{hostname}.{self.zone_name}",
                                     "Type": "A",
@@ -147,13 +129,35 @@ class Zone:
                     },
                 )
             else:
-                LOG.warning(
-                    "Could not find A record in zone %s(%s) with hostname %s and IP address %s.",
-                    self.zone_name,
-                    self.zone_id,
-                    hostname,
-                    ip_address,
-                )
+                if ip_address in ip_list:
+                    ip_list.remove(ip_address)
+                    self._client.change_resource_record_sets(
+                        HostedZoneId=self.zone_id,
+                        ChangeBatch={
+                            "Changes": [
+                                {
+                                    "Action": "UPSERT",
+                                    "ResourceRecordSet": {
+                                        "Name": f"{hostname}.{self.zone_name}",
+                                        "Type": "A",
+                                        "TTL": self._get_record_ttl(hostname),
+                                        "ResourceRecords": [{"Value": ip} for ip in ip_list],
+                                    },
+                                }
+                            ]
+                        },
+                    )
+                else:
+                    raise IHRecordNotFound
+
+        except IHRecordNotFound:
+            LOG.warning(
+                "Could not find A record in zone %s(%s) with hostname %s and IP address %s.",
+                self.zone_name,
+                self.zone_id,
+                hostname,
+                ip_address,
+            )
 
     def search_hostname(self, hostname) -> List[str]:
         """
