@@ -341,3 +341,18 @@ def test_search_hostname_new():
         zone = Zone(zone_name="foo.com")
         with pytest.raises(IHRecordNotFound):
             zone.search_hostname("ip-10-1-102-189")
+
+
+def test_delete_record_unknown():
+    # zone = Zone(zone_name="ci-cd.infrahouse.com")
+    # assert zone.search_hostname("ip-10-1-102-189") == ["10.1.100.243"]
+    mock_client = mock.Mock()
+
+    with (
+        mock.patch.object(Zone, "search_hostname", side_effect=IHRecordNotFound) as mock_search_hostname,        mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client),
+        mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client) as mc,
+    ):
+        zone = Zone(zone_name="foo.com", zone_id="foo_id")
+        zone.delete_record("ip-10-1-102-189", "10.1.102.189")
+        mock_search_hostname.assert_called_once_with("ip-10-1-102-189")
+        mc.change_resource_record_sets.assert_not_called()
