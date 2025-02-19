@@ -2,4 +2,4 @@
 
 __author__ = """Oleksandr Kuzminskyi"""
 __email__ = "aleks@infrahouse.com"
-__version__ = "0.5.2"
+__version__ = "0.6.0"

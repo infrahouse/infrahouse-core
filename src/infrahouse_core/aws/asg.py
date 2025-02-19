@@ -69,6 +69,22 @@ class ASG:
             InstanceId=instance_id or ASGInstance().instance_id,
         )
 
+    def record_lifecycle_action_heartbeat(self, hook_name="terminating", instance_id=None):
+        """
+        Extend lifecycle wait time.
+
+        :param hook_name: Hook name.
+        :type hook_name: str
+        :param instance_id: EC2 instance_id for which the hook is waiting.
+            If not given, assume the local instance.
+        :type instance_id: str
+        """
+        self._autoscaling_client.record_lifecycle_action_heartbeat(
+            LifecycleHookName=hook_name,
+            AutoScalingGroupName=self._asg_name,
+            InstanceId=instance_id or ASGInstance().instance_id,
+        )
+
     @property
     def _autoscaling_client(self):
         return get_client("autoscaling", region=self._region)
