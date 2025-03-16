@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 
-from src.infrahouse_core.aws.ec2_instance import EC2Instance
+from infrahouse_core.aws.ec2_instance import EC2Instance
 
 
 def test_ec2_client():
