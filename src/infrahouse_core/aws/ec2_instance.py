@@ -110,7 +110,7 @@ class EC2Instance:
 
     @cached_property_with_ttl(ttl=10)
     def _describe_instance(self):
-        return self._ec2_client.describe_instances(
+        return self.ec2_client.describe_instances(
             InstanceIds=[
                 self.instance_id,
             ],
