@@ -4,6 +4,7 @@ Module for EC2Instance class - a class tha represents an EC2 instance.
 
 from logging import getLogger
 
+from boto3 import Session
 from cached_property import cached_property_with_ttl
 from ec2_metadata import ec2_metadata
 
@@ -20,9 +21,10 @@ class EC2Instance:
     :type instance_id: str
     """
 
-    def __init__(self, instance_id: str = None, region: str = None):
+    def __init__(self, instance_id: str = None, region: str = None, ec2_client: Session = None):
         self._instance_id = instance_id
         self._region = region
+        self._ec2_client = ec2_client
 
     @property
     def availability_zone(self) -> str:
@@ -30,6 +32,15 @@ class EC2Instance:
         :return: Availability zone where this instance is hosted.
         """
         return ec2_metadata.availability_zone
+
+    @property
+    def ec2_client(self):
+        """
+        :return: Boto3 EC2 client
+        """
+        if self._ec2_client is None:
+            self._ec2_client = get_client("ec2", region=self._region)
+        return self._ec2_client
 
     @property
     def instance_id(self) -> str:
@@ -85,7 +96,7 @@ class EC2Instance:
 
     def add_tag(self, key: str, value: str):
         """Add a tag to the instance."""
-        self._ec2_client.create_tags(
+        self.ec2_client.create_tags(
             Resources=[
                 self.instance_id,
             ],
@@ -96,10 +107,6 @@ class EC2Instance:
                 },
             ],
         )
-
-    @property
-    def _ec2_client(self):
-        return get_client("ec2", region=self._region)
 
     @cached_property_with_ttl(ttl=10)
     def _describe_instance(self):
