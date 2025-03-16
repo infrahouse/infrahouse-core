@@ -349,7 +349,8 @@ def test_delete_record_unknown():
     mock_client = mock.Mock()
 
     with (
-        mock.patch.object(Zone, "search_hostname", side_effect=IHRecordNotFound) as mock_search_hostname,        mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client),
+        mock.patch.object(Zone, "search_hostname", side_effect=IHRecordNotFound) as mock_search_hostname,
+        mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client),
         mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client) as mc,
     ):
         zone = Zone(zone_name="foo.com", zone_id="foo_id")
