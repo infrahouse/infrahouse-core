@@ -39,6 +39,26 @@ class ASGInstance(EC2Instance):
             HealthStatus="Unhealthy",
         )
 
+    def protect(self):
+        """Protect the instance from a scale-in event."""
+        self._autoscaling_client.set_instance_protection(
+            InstanceIds=[
+                self.instance_id,
+            ],
+            AutoScalingGroupName=self.asg_name,
+            ProtectedFromScaleIn=True,
+        )
+
+    def unprotect(self):
+        """Release protection the instance from a scale-in event."""
+        self._autoscaling_client.set_instance_protection(
+            InstanceIds=[
+                self.instance_id,
+            ],
+            AutoScalingGroupName=self.asg_name,
+            ProtectedFromScaleIn=False,
+        )
+
     @property
     def _autoscaling_client(self):
         return get_client("autoscaling", region=self._region)
