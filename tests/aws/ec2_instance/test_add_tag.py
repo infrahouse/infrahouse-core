@@ -10,11 +10,3 @@ def test_add_tag():
         instance = EC2Instance(instance_id="i-aaa")
         instance.add_tag("foo", "bar")
         mock_client.create_tags.assert_called_once_with(Resources=["i-aaa"], Tags=[{"Key": "foo", "Value": "bar"}])
-
-
-def test_add_tag_with_client():
-    # mock_client = mock.Mock()
-
-    instance = EC2Instance()
-    instance.add_tag("foo", "bar")
-    # mock_client.create_tags.assert_called_once_with(Resources=["i-aaa"], Tags=[{"Key": "foo", "Value": "bar"}])
