@@ -42,7 +42,7 @@ hooks:
 
 .PHONY: bootstrap
 bootstrap: hooks pip  ## bootstrap the development environment
-	pip install -e .[dev]
+	pip install -e .[dev,doc]
 
 
 .PHONY: clean

@@ -3,12 +3,12 @@ GitHub Actions
 """
 
 from dataclasses import dataclass
-from functools import cached_property
 from logging import getLogger
 from typing import List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+from cached_property import cached_property_with_ttl
 from github import GithubIntegration
 from github.Consts import MAX_JWT_EXPIRY
 from requests import HTTPError, delete, get, post
@@ -74,7 +74,6 @@ class GitHubActionsRunner:
         :return: True if the runner is busy, False otherwise.
         :rtype: bool
         """
-        self._refresh()
         return self._runner_data["busy"]
 
     @property
@@ -125,7 +124,6 @@ class GitHubActionsRunner:
         :return: Status string (e.g., "online", "offline").
         :rtype: str
         """
-        self._refresh()
         return self._runner_data["status"]
 
     @property
@@ -136,21 +134,8 @@ class GitHubActionsRunner:
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    @cached_property
+    @cached_property_with_ttl(ttl=10)
     def _runner_data(self) -> dict:
-        """
-        Retrieve runner metadata from the GitHub API.
-
-        :return: JSON response with runner details.
-        :rtype: dict
-        """
-        return self._fetch_runner_data()
-
-    def _refresh(self):
-        if "_runner_data" in self.__dict__:
-            del self.__dict__["_runner_data"]
-
-    def _fetch_runner_data(self) -> dict:
         """
         Retrieve runner metadata from the GitHub API.
 
