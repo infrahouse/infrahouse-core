@@ -28,15 +28,18 @@ class DynamoDBTable:
         self._table().delete_item(**kwargs)
 
     @contextlib.contextmanager
-    def lock(self, lock_name, timeout: int = 30):
-        """Global exclusive lock.
+    def lock(self, lock_name: str, timeout: int = 30):
+        """Global exclusive lock context manager.
 
-        Usage: \b
+        This function attempts to acquire a lock on a specific resource in the
+        DynamoDB table using a conditional put operation. If the lock is acquired,
+        the code within the 'with' block will execute. The lock is released after
+        the block execution.
 
-        t = DynamoDBTable("update-dns-BIcLL4ROdNyC15hzy1Ku")
-        with t.lock("foo"):
-            print("hello")
-
+        :param lock_name: The name of the lock (resource) to be acquired.
+        :param timeout: Maximum time in seconds to attempt acquiring the lock.
+        :raises RuntimeError: If the lock cannot be acquired within the timeout.
+        :raises ClientError: If an unexpected error occurs while trying to acquire the lock.
         """
         now = time()
         while True:
@@ -44,30 +47,26 @@ class DynamoDBTable:
                 raise RuntimeError(f"Failed to lock DNS lock table after {timeout} seconds")
 
             try:
-                # Put item with conditional expression to acquire the lock
+                # Attempt to acquire the lock by adding an item with a conditional expression
                 self.put_item(
                     Item={"ResourceId": lock_name},
                     ConditionExpression="attribute_not_exists(#r)",
                     ExpressionAttributeNames={"#r": "ResourceId"},
                 )
-                # Lock acquired
+                # Lock acquired successfully
                 break
             except ClientError as e:
                 if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                    # Else, lock cannot be acquired because already locked
+                    # Lock is already held by another process, retry after a short delay
                     sleep(1)
-                # Another exception than ConditionalCheckFailedException was caught, raise as-is
                 else:
+                    # An unexpected error occurred, propagate the exception
                     raise
         try:
             yield
-
         finally:
-            self.delete_item(
-                Key={
-                    "ResourceId": lock_name,
-                }
-            )
+            # Release the lock by deleting the item
+            self.delete_item(Key={"ResourceId": lock_name})
 
     def put_item(self, **kwargs):
         """Add record to the table."""
