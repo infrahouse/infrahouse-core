@@ -247,6 +247,22 @@ class GitHubActions:
         """
         return next((runner for runner in self.runners if label in runner.labels), None)
 
+    def find_runners_by_label(self, label: str) -> List[GitHubActionsRunner]:
+        """
+        Find all runners that have the specified label.
+
+        This method iterates over all available runners and collects
+        those that contain the specified label in their list of labels.
+
+        :param label: The label to search for.
+        :type label: str
+        :return: A list of GitHubActionsRunner objects that match the label,
+                 or an empty list if none are found.
+        :rtype: List[GitHubActionsRunner]
+        """
+        # Filter runners by checking if the label is present in each runner's labels
+        return [runner for runner in self.runners if label in runner.labels]
+
     @property
     def _github_headers(self) -> dict:
         return {
