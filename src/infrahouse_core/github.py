@@ -44,7 +44,7 @@ class GitHubActionsRunner:
     fetched dynamically via the GitHub API.
     """
 
-    def __init__(self, runner_id: int, github: GitHubAuth):
+    def __init__(self, runner_id: int, github: GitHubAuth, runner_data: Optional[dict] = None):
         """
         Initialize the GitHubActionsRunner.
 
@@ -52,9 +52,12 @@ class GitHubActionsRunner:
         :type runner_id: int
         :param github: Authentication object containing token and org name.
         :type github: GitHubAuth
+        :param runner_data: Optional runner data to avoid an extra API call.
+        :type runner_data: dict
         """
         self._runner_id = runner_id
         self._github = github
+        self.__runner_data = runner_data
 
     @property
     def runner_id(self) -> int:
@@ -142,17 +145,20 @@ class GitHubActionsRunner:
         :return: JSON response with runner details.
         :rtype: dict
         """
-        try:
-            response = get(
-                f"https://api.github.com/orgs/{self._github.org}/actions/runners/{self._runner_id}",
-                headers=self._github_headers,
-                timeout=5,
-            )
-            response.raise_for_status()
-            return response.json()
-        except HTTPError as err:
-            LOG.error("Failed to fetch runner: %s", err)
-            raise
+        if self.__runner_data is None:
+            try:
+                response = get(
+                    f"https://api.github.com/orgs/{self._github.org}/actions/runners/{self._runner_id}",
+                    headers=self._github_headers,
+                    timeout=5,
+                )
+                response.raise_for_status()
+                self.__runner_data = response.json()
+            except HTTPError as err:
+                LOG.error("Failed to fetch runner: %s", err)
+                raise
+
+        return self.__runner_data
 
 
 class GitHubActions:
@@ -198,7 +204,9 @@ class GitHubActions:
         :rtype: list[GitHubActionsRunner]
         """
         if self._runners is None:
-            self._runners = [GitHubActionsRunner(r["id"], self._github) for r in self._get_github_runners()]
+            self._runners = [
+                GitHubActionsRunner(r["id"], self._github, runner_data=r) for r in self._get_github_runners()
+            ]
 
         return self._runners
 
