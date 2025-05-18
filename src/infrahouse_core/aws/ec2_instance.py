@@ -53,7 +53,9 @@ class EC2Instance:
     :type instance_id: str
     """
 
-    def __init__(self, instance_id: str = None, region: str = None, ec2_client: Session = None):
+    def __init__(
+        self, instance_id: str = None, region: str = None, ec2_client: Session = None, ssm_client: Session = None
+    ):
         """
         :param instance_id: Instance id. If omitted, the local instance is read from metadata.
         :type instance_id: str
@@ -61,11 +63,13 @@ class EC2Instance:
         :type region: str
         :param ec2_client: Boto3 EC2 client. If omitted, a client is created using the region and credentials.
         :type ec2_client: Session
+        :param ssm_client: Boto3 SSM client. If omitted, a client is created using the region and credentials.
+        :type ssm_client: Session
         """
         self._instance_id = instance_id
         self._region = region
         self._ec2_client = ec2_client
-        self._ssm_client = None
+        self._ssm_client = ssm_client
 
     @property
     def availability_zone(self) -> str:
