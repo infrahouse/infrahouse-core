@@ -222,27 +222,23 @@ class GitHubActions:
         )
         response.raise_for_status()
 
-    def ensure_registration_token(self, registration_token_secret: str):
+    def ensure_registration_token(self, registration_token_secret: str, present=True):
         """
-        Ensure a registration token is saved in AWS Secrets Manager.
-        If the secret does not exist, it will be created.
+        Ensure a registration token is present (by default) or absent in AWS Secrets Manager.
+        If the argument `present` is true, and the registration token is secret does not exist,
+        it will be created.
+        If the argument `present` is false, and the registration token is secret exist,
+        it will be deleted.
 
         :param registration_token_secret: The name of the secret to store the token.
         :type registration_token_secret: str
+        :param present: Whether the registration token should be present or not.
+        :type present: bool
         """
-        secretsmanager_client = boto3.client("secretsmanager")
-        try:
-            secretsmanager_client.describe_secret(SecretId=registration_token_secret)
-
-        except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
-                secretsmanager_client.create_secret(
-                    Name=registration_token_secret,
-                    Description="GitHub Actions runner registration token",
-                    SecretString=self.registration_token,
-                )
-            else:
-                raise
+        if present:
+            self._ensure_present_secret(registration_token_secret)
+        else:
+            self._ensure_absent_secret(registration_token_secret)
 
     def find_runner_by_label(self, label: str) -> Optional[GitHubActionsRunner]:
         """
@@ -295,6 +291,57 @@ class GitHubActions:
             runners.extend(data["runners"])
             url = response.links.get("next", {}).get("url")
         return runners
+
+    def _ensure_present_secret(self, registration_token_secret):
+        """
+        Ensure a registration token secret is present in AWS Secrets Manager.
+
+        This method checks if the specified secret exists. If it does not exist,
+        it creates the secret with the registration token. If an error other than
+        'ResourceNotFoundException' occurs during the check, it raises the exception.
+
+        :param registration_token_secret: The name of the secret to ensure presence.
+        :type registration_token_secret: str
+        :raises ClientError: If an error occurs that is not a 'ResourceNotFoundException'.
+        """
+        secretsmanager_client = boto3.client("secretsmanager")
+        try:
+            secretsmanager_client.describe_secret(SecretId=registration_token_secret)
+
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+                secretsmanager_client.create_secret(
+                    Name=registration_token_secret,
+                    Description="GitHub Actions runner registration token",
+                    SecretString=self.registration_token,
+                )
+            else:
+                raise
+
+    @staticmethod
+    def _ensure_absent_secret(registration_token_secret):
+        """
+        Ensure a registration token secret is absent in AWS Secrets Manager.
+
+        This method checks if the specified secret exists. If it does exist,
+        it deletes the secret. If an error other than 'ResourceNotFoundException'
+        occurs during the check, it raises the exception.
+
+        :param registration_token_secret: The name of the secret to ensure absence.
+        :type registration_token_secret: str
+        :raises ClientError: If an error occurs that is not a 'ResourceNotFoundException'.
+        """
+        secretsmanager_client = boto3.client("secretsmanager")
+        try:
+            secretsmanager_client.describe_secret(SecretId=registration_token_secret)
+            secretsmanager_client.delete_secret(SecretId=registration_token_secret)
+
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+                return
+
+            LOG.error("Error occurred while deleting secret: %s", err)
+            raise
 
 
 def get_tmp_token(gh_app_id: int, pem_key_secret: str, github_org_name: str) -> str:
