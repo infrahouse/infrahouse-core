@@ -315,7 +315,9 @@ class GitHubActions:
                     Description="GitHub Actions runner registration token",
                     SecretString=self.registration_token,
                 )
+                LOG.info("Created secret %s", registration_token_secret)
             else:
+                LOG.error("Error occurred while deleting secret: %s", err)
                 raise
 
     @staticmethod
@@ -335,6 +337,7 @@ class GitHubActions:
         try:
             secretsmanager_client.describe_secret(SecretId=registration_token_secret)
             secretsmanager_client.delete_secret(SecretId=registration_token_secret)
+            LOG.info("Deleted secret %s", registration_token_secret)
 
         except ClientError as err:
             if err.response["Error"]["Code"] == "ResourceNotFoundException":
