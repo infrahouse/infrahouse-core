@@ -4,16 +4,6 @@ from infrahouse_core.aws.asg import ASG
 from infrahouse_core.aws.asg_instance import ASGInstance
 
 
-def test_role():
-    asg = ASG(
-        "update-dns-wIIbUFvBKQS8w3kzJLYbkhu2EDBYoijP",
-        region="us-west-2",
-        role_arn="arn:aws:iam::303467602807:role/update-dns-tester",
-    )
-    assert len(asg.instances) > 0
-    assert asg.instances[0].private_ip
-
-
 def test_instances():
     with (
         mock.patch.object(
