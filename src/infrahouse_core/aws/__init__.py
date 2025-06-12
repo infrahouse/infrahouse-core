@@ -2,6 +2,8 @@
 AWS classes.
 """
 
+import inspect
+import json
 import sys
 import time
 import webbrowser
@@ -116,7 +118,7 @@ def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) ->
     return boto3.Session(region_name=aws_region)
 
 
-def get_client(service_name, role_arn=None, region=None, session_name=__name__):
+def get_client(service_name, role_arn=None, region=None, session_name=None):
     """
     Get an AWS service client assuming a role if specified.
 
@@ -132,6 +134,14 @@ def get_client(service_name, role_arn=None, region=None, session_name=__name__):
     :return: AWS boto3 client.
     """
     if role_arn:
+        if session_name is None:
+            # Get caller's function or module name
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
+            caller = frame.function  # e.g., 'main', 'do_work', etc.
+            mod_name = module.__name__ if module else "unknown_module"
+            session_name = f"{mod_name}.{caller}"
+
         sts = boto3.client("sts", region_name=region)
         aws_iam_role = sts.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
         session = boto3.Session(
@@ -142,7 +152,8 @@ def get_client(service_name, role_arn=None, region=None, session_name=__name__):
         )
         sts = session.client("sts", region_name=region)
         response = sts.get_caller_identity()
-        LOG.debug("Assumed role: %s", response)
+        LOG.debug("Assumed role: %s", json.dumps(response, indent=4))
+        LOG.debug("Returning a boto3 client in the %s region", session.region_name)
         return session.client(service_name, region_name=region)
 
     return boto3.client(service_name, region_name=region)
