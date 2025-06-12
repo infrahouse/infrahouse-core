@@ -2,6 +2,7 @@
 Module for EC2Instance class - a class tha represents an EC2 instance.
 """
 
+import warnings
 from enum import Enum
 from logging import getLogger
 from time import sleep
@@ -53,8 +54,13 @@ class EC2Instance:
     :type instance_id: str
     """
 
-    def __init__(
-        self, instance_id: str = None, region: str = None, ec2_client: Session = None, ssm_client: Session = None
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        instance_id: str = None,
+        region: str = None,
+        ec2_client: Session = None,
+        ssm_client: Session = None,
+        role_arn: str = None,
     ):
         """
         :param instance_id: Instance id. If omitted, the local instance is read from metadata.
@@ -65,11 +71,26 @@ class EC2Instance:
         :type ec2_client: Session
         :param ssm_client: Boto3 SSM client. If omitted, a client is created using the region and credentials.
         :type ssm_client: Session
+        :param role_arn: Use this IAM role to create boto3 clients.
+        :type role_arn: str
         """
+        if ec2_client is not None:
+            warnings.warn(
+                "'ec2_client' is deprecated and will be removed in a future version. Pass role_arn instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if ssm_client is not None:
+            warnings.warn(
+                "'ssm_client' is deprecated and will be removed in a future version. Pass role_arn instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self._instance_id = instance_id
         self._region = region
         self._ec2_client = ec2_client
         self._ssm_client = ssm_client
+        self._role_arn = role_arn
 
     @property
     def availability_zone(self) -> str:
@@ -87,7 +108,7 @@ class EC2Instance:
         :return: Boto3 EC2 client.
         """
         if self._ec2_client is None:
-            self._ec2_client = get_client("ec2", region=self._region)
+            self._ec2_client = get_client("ec2", region=self._region, role_arn=self._role_arn)
         return self._ec2_client
 
     @property
@@ -144,7 +165,7 @@ class EC2Instance:
         :return: Boto3 SSM client.
         """
         if self._ssm_client is None:
-            self._ssm_client = get_client("ssm", region=self._region)
+            self._ssm_client = get_client("ssm", region=self._region, role_arn=self._role_arn)
         return self._ssm_client
 
     @property

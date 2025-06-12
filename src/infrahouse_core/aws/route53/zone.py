@@ -23,11 +23,12 @@ class Zone:
     :type zone_name: str
     """
 
-    def __init__(self, zone_id: str = None, zone_name: str = None):
+    def __init__(self, zone_id: str = None, zone_name: str = None, role_arn: str = None):
         if zone_name is None and zone_id is None:
             raise RuntimeError("Either zone_id or zone_name must be passed. Both can't be None.")
         self._zone_id = zone_id
         self._zone_name = zone_name
+        self._role_arn = role_arn
 
     @property
     def zone_id(self):
@@ -183,7 +184,7 @@ class Zone:
 
     @property
     def _client(self):
-        return get_client("route53")
+        return get_client("route53", role_arn=self._role_arn)
 
     def _get_record_ttl(self, hostname):
         full_name = f"{hostname}.{self.zone_name}"
