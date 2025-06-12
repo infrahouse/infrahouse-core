@@ -6,7 +6,7 @@ from infrahouse_core.aws.ec2_instance import EC2Instance
 def test_describe_instance():
     with mock.patch("infrahouse_core.aws.ec2_instance.get_client") as mock_client:
         assert EC2Instance(instance_id="foo")._describe_instance
-        mock_client.assert_called_once_with("ec2", region=None)
+        mock_client.assert_called_once_with("ec2", region=None, role_arn=None)
 
 
 def test_describe_instance_with_client():
