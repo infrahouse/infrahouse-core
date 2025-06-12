@@ -3,6 +3,7 @@ Module for ASG class - a class to work with Autoscaling group.
 """
 
 from logging import getLogger
+from pprint import pformat
 from typing import Dict, List
 
 from botocore.exceptions import ClientError
@@ -36,7 +37,7 @@ class ASG:
         :return: List of EC2 instances in the autoscaling group.
         """
         return [
-            ASGInstance(instance_id=instance["InstanceId"], region=self._region)
+            ASGInstance(instance_id=instance["InstanceId"], region=self._region, role_arn=self._role_arn)
             for instance in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Instances"]
         ]
 
@@ -88,12 +89,16 @@ class ASG:
 
     @property
     def _autoscaling_client(self):
-        return get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+        client = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+        LOG.debug("Client in the %s region", client.meta.region_name)
+        return client
 
     @property
     def _describe_auto_scaling_groups(self):
-        return self._autoscaling_client.describe_auto_scaling_groups(
+        result = self._autoscaling_client.describe_auto_scaling_groups(
             AutoScalingGroupNames=[
                 self._asg_name,
             ],
         )
+        LOG.debug("_describe_auto_scaling_groups() = %s", pformat(result))
+        return result

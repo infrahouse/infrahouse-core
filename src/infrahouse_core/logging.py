@@ -18,7 +18,7 @@ class LessThanFilter(logging.Filter):  # pylint: disable=too-few-public-methods
         return 1 if record.levelno < self.max_level else 0
 
 
-def setup_logging(logger=None, debug=False, quiet=False):  # pragma: no cover
+def setup_logging(logger=None, debug=False, quiet=False, debug_botocore=False):  # pragma: no cover
     """Configures logging for the module"""
     logger = logger or logging.getLogger()
     fmt_str = "%(asctime)s: %(levelname)s: %(name)s:%(module)s.%(funcName)s():%(lineno)d: %(message)s"
@@ -50,4 +50,5 @@ def setup_logging(logger=None, debug=False, quiet=False):  # pragma: no cover
     logger.setLevel(logging.DEBUG)
 
     # botocore prints a lot of logs at INFO and WARNING level that deserve to be only DEBUG.
-    logging.getLogger("botocore").setLevel(logging.DEBUG if debug else logging.ERROR)
+    botocore_level = logging.DEBUG if debug_botocore else logging.WARNING
+    logging.getLogger("botocore").setLevel(botocore_level if debug else logging.ERROR)
