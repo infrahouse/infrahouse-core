@@ -177,7 +177,6 @@ class GitHubActions:
         :type github: GitHubAuth
         """
         self._github = github
-        self._runners = None
 
     @property
     def registration_token(self) -> str:
@@ -203,12 +202,7 @@ class GitHubActions:
         :return: A list of GitHubActionsRunner objects.
         :rtype: list[GitHubActionsRunner]
         """
-        if self._runners is None:
-            self._runners = [
-                GitHubActionsRunner(r["id"], self._github, runner_data=r) for r in self._get_github_runners()
-            ]
-
-        return self._runners
+        return [GitHubActionsRunner(r["id"], self._github, runner_data=r) for r in self._get_github_runners()]
 
     def deregister_runner(self, runner: GitHubActionsRunner):
         """
