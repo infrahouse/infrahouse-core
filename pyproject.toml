@@ -52,7 +52,7 @@ dev = [
     "pylint ~=4.0",
 ]
 doc = [
-    "Sphinx ~= 8.1"
+    "Sphinx ~=9.1"
 ]
 
 [project.urls]
