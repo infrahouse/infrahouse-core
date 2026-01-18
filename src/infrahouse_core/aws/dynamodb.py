@@ -9,6 +9,8 @@ from time import sleep, time
 import boto3
 from botocore.exceptions import ClientError
 
+from infrahouse_core.aws.exceptions import IHItemNotFound
+
 LOG = getLogger(__name__)
 
 
@@ -26,6 +28,20 @@ class DynamoDBTable:
     def delete_item(self, **kwargs):
         """Delete record from the table."""
         self._table().delete_item(**kwargs)
+
+    def get_item(self, **kwargs) -> dict:
+        """Get a record from the table.
+
+        :param kwargs: Arguments passed to boto3 DynamoDB get_item().
+            Key (required): Primary key of the item to retrieve.
+        :return: The item attributes as a dictionary.
+        :raises IHItemNotFound: If the item does not exist.
+        """
+        response = self._table().get_item(**kwargs)
+        item = response.get("Item")
+        if item is None:
+            raise IHItemNotFound(f"Item not found in '{self._table_name}': {kwargs.get('Key')}")
+        return item
 
     @contextlib.contextmanager
     def lock(self, lock_name: str, timeout: int = 30):

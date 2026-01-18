@@ -108,3 +108,5 @@ ENV/
 .vscode/
 .idea/
 
+.claude/reviews
+.claude/settings.local.json
