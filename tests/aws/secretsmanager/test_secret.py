@@ -12,6 +12,12 @@ def _make_client_error(code):
     return ClientError({"Error": {"Code": code, "Message": "test"}}, "test_operation")
 
 
+def test_name():
+    """Test name property returns the secret name."""
+    secret = Secret("my-secret", region="us-east-1")
+    assert secret.name == "my-secret"
+
+
 def test_exists_true():
     """Test exists returns True when secret exists."""
     secret = Secret("my-secret", region="us-east-1")
@@ -135,7 +141,6 @@ def test_ensure_present_creates_when_missing():
     """Test ensure_present creates secret when it doesn't exist."""
     secret = Secret("my-secret", region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_secret.side_effect = _make_client_error("ResourceNotFoundException")
 
     with mock.patch.object(secret, "_client", return_value=mock_client):
         secret.ensure_present("my-value", description="Test secret")
@@ -143,21 +148,33 @@ def test_ensure_present_creates_when_missing():
 
 
 def test_ensure_present_skips_when_exists():
-    """Test ensure_present does nothing when secret exists."""
+    """Test ensure_present does nothing when secret already exists."""
     secret = Secret("my-secret", region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_secret.return_value = {"ARN": "arn:..."}
+    mock_client.create_secret.side_effect = _make_client_error("ResourceExistsException")
 
     with mock.patch.object(secret, "_client", return_value=mock_client):
-        secret.ensure_present("my-value")
-        mock_client.create_secret.assert_not_called()
+        secret.ensure_present("my-value")  # Should not raise
+        mock_client.create_secret.assert_called_once()
+        mock_client.put_secret_value.assert_not_called()
+
+
+def test_ensure_present_updates_when_exists_and_flag_set():
+    """Test ensure_present updates secret when it exists and update_if_exists=True."""
+    secret = Secret("my-secret", region="us-east-1")
+    mock_client = mock.MagicMock()
+    mock_client.create_secret.side_effect = _make_client_error("ResourceExistsException")
+
+    with mock.patch.object(secret, "_client", return_value=mock_client):
+        secret.ensure_present("new-value", update_if_exists=True)
+        mock_client.create_secret.assert_called_once()
+        mock_client.put_secret_value.assert_called_once_with(SecretId="my-secret", SecretString="new-value")
 
 
 def test_ensure_absent_deletes_when_exists():
     """Test ensure_absent deletes secret when it exists."""
     secret = Secret("my-secret", region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_secret.return_value = {"ARN": "arn:..."}
 
     with mock.patch.object(secret, "_client", return_value=mock_client):
         secret.ensure_absent(force=True)
@@ -171,11 +188,11 @@ def test_ensure_absent_skips_when_missing():
     """Test ensure_absent does nothing when secret doesn't exist."""
     secret = Secret("my-secret", region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_secret.side_effect = _make_client_error("ResourceNotFoundException")
+    mock_client.delete_secret.side_effect = _make_client_error("ResourceNotFoundException")
 
     with mock.patch.object(secret, "_client", return_value=mock_client):
-        secret.ensure_absent()
-        mock_client.delete_secret.assert_not_called()
+        secret.ensure_absent()  # Should not raise
+        mock_client.delete_secret.assert_called_once()
 
 
 def test_arn():

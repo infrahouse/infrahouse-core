@@ -39,6 +39,15 @@ class Secret:
         return self.__client
 
     @property
+    def name(self) -> str:
+        """
+        Get the secret name.
+
+        :return: The secret name as provided to the constructor.
+        """
+        return self._secret_name
+
+    @property
     def exists(self) -> bool:
         """
         Check if the secret exists.
@@ -61,6 +70,8 @@ class Secret:
 
         If the secret value is valid JSON, it is parsed and returned as a dict.
         Otherwise, the raw string is returned.
+
+        Note: Binary secrets (SecretBinary) are not supported.
 
         :return: The secret value as a dict (if JSON) or string.
         :raises IHSecretNotFound: If the secret does not exist.
@@ -177,7 +188,7 @@ class Secret:
                 raise IHSecretNotFound(f"Secret not found: {self._secret_name}") from err
             raise
 
-    def ensure_present(self, value: Union[dict, str], description: str = None):
+    def ensure_present(self, value: Union[dict, str], description: str = None, update_if_exists: bool = False):
         """
         Ensure the secret exists, creating it if necessary.
 
@@ -185,9 +196,18 @@ class Secret:
         :type value: Union[dict, str]
         :param description: Optional description for the secret.
         :type description: str
+        :param update_if_exists: If True, update the secret value if it already exists.
+        :type update_if_exists: bool
+        :raises ClientError: If an unexpected AWS error occurs.
         """
-        if not self.exists:
+        try:
             self.create(value, description=description)
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ResourceExistsException":
+                if update_if_exists:
+                    self.update(value)
+                return
+            raise
 
     def ensure_absent(self, force: bool = False, recovery_window_days: int = None):
         """
@@ -198,6 +218,9 @@ class Secret:
         :param recovery_window_days: Days before permanent deletion (7-30).
             Ignored if force=True.
         :type recovery_window_days: int
+        :raises ClientError: If an unexpected AWS error occurs.
         """
-        if self.exists:
+        try:
             self.delete(force=force, recovery_window_days=recovery_window_days)
+        except IHSecretNotFound:
+            pass  # Already gone, that's fine
