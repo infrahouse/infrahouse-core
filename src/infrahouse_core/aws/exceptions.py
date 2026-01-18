@@ -19,3 +19,11 @@ class IHDynamoDBException(IHAWSException):
 
 class IHItemNotFound(IHDynamoDBException):
     """Requested DynamoDB item doesn't exist"""
+
+
+class IHSecretsManagerException(IHAWSException):
+    """Secrets Manager related InfraHouse exception"""
+
+
+class IHSecretNotFound(IHSecretsManagerException):
+    """Requested secret doesn't exist"""
