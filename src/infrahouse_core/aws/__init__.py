@@ -234,6 +234,14 @@ def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: str = None):
     )
 
 
+def _format_client_error(err: ClientError) -> str:
+    """Extract error code and message from a ClientError."""
+    error_info = err.response.get("Error", {})
+    code = error_info.get("Code", "Unknown")
+    message = error_info.get("Message", "No details provided")
+    return f"{code} - {message}"
+
+
 def _get_credentials(aws_config: AWSConfig, profile_name: str):
     """
     Login into AWS using SSO.
@@ -241,29 +249,46 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
     Credit:
     https://stackoverflow.com/questions/62311866/how-to-use-the-aws-python-sdk-while-connecting-via-sso-credentials
 
-    :raise IHAWSException: If user didn't confirm auth
+    :raise IHAWSException: If user didn't confirm auth or SSO configuration is invalid.
     """
 
     session = Session()
     sso_oidc = session.client("sso-oidc")
-    client_creds = sso_oidc.register_client(
-        clientName="infrahouse-toolkit",
-        clientType="public",
-    )
+
+    try:
+        client_creds = sso_oidc.register_client(
+            clientName="infrahouse-toolkit",
+            clientType="public",
+        )
+    except ClientError as err:
+        raise IHAWSException(
+            f"Failed to register SSO client for profile '{profile_name}': {_format_client_error(err)}"
+        ) from err
+
     LOG.debug("client_creds = %s", pformat(client_creds, indent=4))
-    device_authorization = sso_oidc.start_device_authorization(
-        clientId=client_creds["clientId"],
-        clientSecret=client_creds["clientSecret"],
-        startUrl=aws_config.get_start_url(profile_name),
-    )
+
+    start_url = aws_config.get_start_url(profile_name)
+    LOG.debug("Using SSO start URL: %s", start_url)
+
+    try:
+        device_authorization = sso_oidc.start_device_authorization(
+            clientId=client_creds["clientId"],
+            clientSecret=client_creds["clientSecret"],
+            startUrl=start_url,
+        )
+    except ClientError as err:
+        raise IHAWSException(
+            f"Failed to start SSO device authorization for profile '{profile_name}': "
+            f"{_format_client_error(err)}. "
+            f"Check your SSO configuration (sso_start_url: {start_url})"
+        ) from err
 
     LOG.debug("device_authorization = %s", pformat(device_authorization, indent=4))
-    url = device_authorization["verificationUriComplete"]
     device_code = device_authorization["deviceCode"]
     expires_in = device_authorization["expiresIn"]
     interval = device_authorization["interval"]
     LOG.info("Verify user code: %s", device_authorization["userCode"])
-    webbrowser.open(url, autoraise=True)
+    webbrowser.open(device_authorization["verificationUriComplete"], autoraise=True)
     for _ in range(1, expires_in // interval + 1):
         sleep(interval)
         try:
@@ -273,14 +298,11 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
                 clientId=client_creds["clientId"],
                 clientSecret=client_creds["clientSecret"],
             )
-            access_token = token["accessToken"]
-            sso = session.client("sso")
-            role_creds = sso.get_role_credentials(
+            return session.client("sso").get_role_credentials(
                 roleName=aws_config.get_role(profile_name),
                 accountId=aws_config.get_account_id(profile_name),
-                accessToken=access_token,
+                accessToken=token["accessToken"],
             )["roleCredentials"]
-            return role_creds
         except sso_oidc.exceptions.AuthorizationPendingException:
             pass
 
