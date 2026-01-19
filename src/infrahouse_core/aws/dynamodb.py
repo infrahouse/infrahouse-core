@@ -6,9 +6,9 @@ import contextlib
 from logging import getLogger
 from time import sleep, time
 
-import boto3
 from botocore.exceptions import ClientError
 
+from infrahouse_core.aws import get_resource
 from infrahouse_core.aws.exceptions import IHItemNotFound
 
 LOG = getLogger(__name__)
@@ -22,12 +22,8 @@ class DynamoDBTable:
     :type table_name: str
     :param region: AWS region
     :type region: str
-    :param role_arn: IAM role ARN to assume (currently not supported, will be added in future version)
+    :param role_arn: IAM role ARN to assume for cross-account access.
     :type role_arn: str
-
-    .. note::
-        role_arn parameter is accepted but not currently implemented.
-        This will be added in a future version.
     """
 
     def __init__(self, table_name: str, region: str = None, role_arn: str = None):
@@ -35,12 +31,6 @@ class DynamoDBTable:
         self._region = region
         self._role_arn = role_arn
         self._table_instance = None
-
-        if role_arn:
-            LOG.warning(
-                "role_arn parameter is not yet supported for DynamoDBTable and will be ignored. "
-                "This will be added in a future version."
-            )
 
     def delete_item(self, **kwargs):
         """Delete record from the table."""
@@ -106,8 +96,7 @@ class DynamoDBTable:
 
     def _table(self):
         if self._table_instance is None:
-            # TODO: Add role_arn support - requires session management # pylint: disable=fixme
-            resource = boto3.resource("dynamodb", region_name=self._region)
+            resource = get_resource("dynamodb", role_arn=self._role_arn, region=self._region)
             self._table_instance = resource.Table(self._table_name)
             LOG.debug("Created DynamoDB table resource for %s", self._table_name)
         return self._table_instance

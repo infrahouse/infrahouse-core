@@ -9,7 +9,7 @@ import sys
 import time
 import webbrowser
 from logging import getLogger
-from os import environ
+from os import environ, makedirs
 from os import path as osp
 from pprint import pformat
 from time import sleep
@@ -94,7 +94,8 @@ def get_aws_client(service_name: str, profile: str, region: str, session=None):
     :return: A client instance.
     """
     session = session or Session(region_name=region, profile_name=profile)
-    return session.client(service_name)
+    # boto3 stubs use Literal types for service names; str works fine at runtime
+    return session.client(service_name)  # type: ignore[arg-type]
 
 
 def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) -> Session:
@@ -132,45 +133,123 @@ def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) ->
     return boto3.Session(region_name=aws_region)
 
 
-def get_client(service_name, role_arn=None, region=None, session_name=None):
+def get_session(role_arn=None, region=None, session_name=None):
     """
-    Get an AWS service client assuming a role if specified.
+    Get a boto3 session, optionally with assumed role credentials.
 
-    :param service_name: AWS service. ec2, sts, etc.
-    :type service_name: str
-    :param role_arn: Role ARN if it needs to be assumed.
+    Use this function when you need to create multiple clients or resources
+    with the same credentials. For single client/resource creation, prefer
+    :func:`get_client` or :func:`get_resource` instead.
+
+    :param role_arn: IAM role ARN to assume. If None, returns a default session.
     :type role_arn: str
-    :param session_name: A human-readable string that tells something about this session.
-        Exact value isn't important.
-    :type session_name: str
     :param region: AWS region name.
     :type region: str
-    :return: AWS boto3 client.
+    :param session_name: Session name for CloudTrail auditing. If None, auto-generated
+        from caller context (module.function format).
+    :type session_name: str
+    :return: A boto3 Session object.
+    :rtype: boto3.Session
+
+    Example::
+
+        # With role assumption
+        session = get_session(role_arn="arn:aws:iam::123456789012:role/MyRole")
+        ec2 = session.client("ec2")
+        s3 = session.resource("s3")
+
+        # Without role assumption (uses default credentials)
+        session = get_session(region="us-west-2")
     """
     if role_arn:
         if session_name is None:
-            # Get caller's function or module name
+            # Auto-generate from caller context for CloudTrail auditing
             frame = inspect.stack()[1]
             module = inspect.getmodule(frame[0])
-            caller = frame.function  # e.g., 'main', 'do_work', etc.
+            caller = frame.function
             mod_name = module.__name__ if module else "unknown_module"
             session_name = f"{mod_name}.{caller}"
 
         sts = boto3.client("sts", region_name=region)
-        aws_iam_role = sts.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
+        assumed_role = sts.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
         session = boto3.Session(
-            aws_access_key_id=aws_iam_role["Credentials"]["AccessKeyId"],
-            aws_secret_access_key=aws_iam_role["Credentials"]["SecretAccessKey"],
-            aws_session_token=aws_iam_role["Credentials"]["SessionToken"],
+            aws_access_key_id=assumed_role["Credentials"]["AccessKeyId"],
+            aws_secret_access_key=assumed_role["Credentials"]["SecretAccessKey"],
+            aws_session_token=assumed_role["Credentials"]["SessionToken"],
             region_name=region,
         )
+        # Verify the assumed identity
         sts = session.client("sts", region_name=region)
         response = sts.get_caller_identity()
         LOG.debug("Assumed role: %s", json.dumps(response, indent=4))
-        LOG.debug("Returning a boto3 client in the %s region", session.region_name)
-        return session.client(service_name, region_name=region)
+        return session
 
-    return boto3.client(service_name, region_name=region)
+    return boto3.Session(region_name=region)
+
+
+def get_client(service_name, role_arn=None, region=None, session_name=None):
+    """
+    Get an AWS service client, optionally assuming a role.
+
+    This is a convenience wrapper around :func:`get_session` for creating
+    a single boto3 client.
+
+    :param service_name: AWS service name (e.g., "ec2", "s3", "dynamodb").
+    :type service_name: str
+    :param role_arn: IAM role ARN to assume. If None, uses default credentials.
+    :type role_arn: str
+    :param region: AWS region name.
+    :type region: str
+    :param session_name: Session name for CloudTrail auditing. If None, auto-generated.
+    :type session_name: str
+    :return: A boto3 client for the specified service.
+
+    Example::
+
+        # Cross-account access
+        ec2 = get_client("ec2", role_arn="arn:aws:iam::123456789012:role/MyRole")
+
+        # Same account, specific region
+        s3 = get_client("s3", region="eu-west-1")
+    """
+    session = get_session(role_arn=role_arn, region=region, session_name=session_name)
+    LOG.debug("Returning %s client in %s region", service_name, session.region_name)
+    # boto3 stubs use Literal types for service names; str works fine at runtime
+    return session.client(service_name, region_name=region)  # type: ignore[arg-type]
+
+
+def get_resource(service_name, role_arn=None, region=None, session_name=None):
+    """
+    Get an AWS service resource, optionally assuming a role.
+
+    This is a convenience wrapper around :func:`get_session` for creating
+    a single boto3 resource. Use this for high-level AWS interfaces like
+    DynamoDB Table or S3 Bucket objects.
+
+    :param service_name: AWS service name (e.g., "dynamodb", "s3").
+    :type service_name: str
+    :param role_arn: IAM role ARN to assume. If None, uses default credentials.
+    :type role_arn: str
+    :param region: AWS region name.
+    :type region: str
+    :param session_name: Session name for CloudTrail auditing. If None, auto-generated.
+    :type session_name: str
+    :return: A boto3 resource for the specified service.
+
+    Example::
+
+        # DynamoDB with cross-account access
+        dynamodb = get_resource("dynamodb", role_arn="arn:aws:iam::123456789012:role/MyRole")
+        table = dynamodb.Table("my-table")
+
+        # S3 in specific region
+        s3 = get_resource("s3", region="us-east-1")
+        bucket = s3.Bucket("my-bucket")
+    """
+    session = get_session(role_arn=role_arn, region=region, session_name=session_name)
+    LOG.debug("Returning %s resource in %s region", service_name, session.region_name)
+    # boto3 stubs use Literal types for service names; str works fine at runtime
+    return session.resource(service_name, region_name=region)  # type: ignore[arg-type]
 
 
 def get_credentials_from_profile() -> dict:
@@ -231,6 +310,12 @@ def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: str = None):
     https://stackoverflow.com/questions/62311866/how-to-use-the-aws-python-sdk-while-connecting-via-sso-credentials
     """
     cache_directory = osp.expanduser("~/.infrahouse-toolkit")
+
+    # Ensure directory exists with secure permissions BEFORE use to prevent race condition
+    # where credentials could be exposed with default permissions
+    makedirs(cache_directory, mode=0o700, exist_ok=True)
+    ensure_permissions(cache_directory, 0o700)
+
     with Cache(directory=cache_directory) as cache_reference:
         cache_key = f"ih-ec2-credentials-{profile_name}"
         credentials = cache_reference.get(cache_key)
@@ -242,7 +327,6 @@ def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: str = None):
                 expire=int(int(credentials["expiration"]) / 1000 - int(time.time())),
             )
 
-    ensure_permissions(cache_directory, 0o700)
     return Session(
         region_name=region or aws_config.get_region(profile_name),
         aws_access_key_id=credentials["accessKeyId"],
