@@ -44,7 +44,7 @@ class DynamoDBTable:
         return item
 
     @contextlib.contextmanager
-    def lock(self, lock_name: str, timeout: int = 30):
+    def lock(self, lock_name: str, timeout: int = 30, key_name: str = "ResourceId"):
         """Global exclusive lock context manager.
 
         This function attempts to acquire a lock on a specific resource in the
@@ -54,35 +54,34 @@ class DynamoDBTable:
 
         :param lock_name: The name of the lock (resource) to be acquired.
         :param timeout: Maximum time in seconds to attempt acquiring the lock.
+        :param key_name: The partition key name in the DynamoDB table (default: "ResourceId").
         :raises RuntimeError: If the lock cannot be acquired within the timeout.
         :raises ClientError: If an unexpected error occurs while trying to acquire the lock.
         """
         now = time()
         while True:
             if time() > now + timeout:
-                raise RuntimeError(f"Failed to lock DNS lock table after {timeout} seconds")
+                raise RuntimeError(f"Failed to acquire lock '{lock_name}' after {timeout} seconds")
 
             try:
-                # Attempt to acquire the lock by adding an item with a conditional expression
                 self.put_item(
-                    Item={"ResourceId": lock_name},
+                    Item={key_name: lock_name},
                     ConditionExpression="attribute_not_exists(#r)",
-                    ExpressionAttributeNames={"#r": "ResourceId"},
+                    ExpressionAttributeNames={"#r": key_name},
                 )
-                # Lock acquired successfully
+                LOG.info("Lock acquired: %s", lock_name)
                 break
             except ClientError as e:
                 if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                    # Lock is already held by another process, retry after a short delay
+                    LOG.debug("Lock busy, waiting...")
                     sleep(1)
                 else:
-                    # An unexpected error occurred, propagate the exception
                     raise
         try:
             yield
         finally:
-            # Release the lock by deleting the item
-            self.delete_item(Key={"ResourceId": lock_name})
+            self.delete_item(Key={key_name: lock_name})
+            LOG.info("Lock released: %s", lock_name)
 
     def put_item(self, **kwargs):
         """Add record to the table."""
