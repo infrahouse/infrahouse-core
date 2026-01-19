@@ -41,7 +41,7 @@ def test_zone_id_not_found():
     mock_client.list_hosted_zones_by_name.return_value = {
         "HostedZones": [
             {
-                "Id": "/hostedzone/foo",
+                "Id": "/hostedzone/Z1234567890ABC",
                 "Name": "ci-cd.infrahouse.com.",
                 "CallerReference": "terraform-20230810002609851800000001",
                 "Config": {"Comment": "Managed by Terraform", "PrivateZone": False},
@@ -53,17 +53,18 @@ def test_zone_id_not_found():
         "MaxItems": "1",
     }
     with mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
-        zone = Zone(zone_name="foo_zone")
+        zone = Zone(zone_name="nonexistent.example.com")
         with pytest.raises(IHZoneNotFound):
-            assert zone.zone_id == "foo"
-        mock_client.list_hosted_zones_by_name.assert_called_once_with(DNSName="foo_zone.", MaxItems="1")
+            assert zone.zone_id == "Z1234567890ABC"
+        mock_client.list_hosted_zones_by_name.assert_called_once_with(DNSName="nonexistent.example.com.", MaxItems="1")
 
 
 def test_zone_name_by_id():
+    zone_id = "Z1234567890ABC"
     mock_client = mock.Mock()
     mock_client.get_hosted_zone.return_value = {
         "HostedZone": {
-            "Id": "/hostedzone/foo",
+            "Id": f"/hostedzone/{zone_id}",
             "Name": "ci-cd.infrahouse.com.",
             "CallerReference": "terraform-20230810002609851800000001",
             "Config": {"Comment": "Managed by Terraform", "PrivateZone": False},
@@ -79,9 +80,9 @@ def test_zone_name_by_id():
         },
     }
     with mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
-        zone = Zone(zone_id="foo")
+        zone = Zone(zone_id=zone_id)
         assert zone.zone_name == "ci-cd.infrahouse.com."
-        mock_client.get_hosted_zone.assert_called_once_with(Id="foo")
+        mock_client.get_hosted_zone.assert_called_once_with(Id=zone_id)
 
 
 @pytest.mark.parametrize(
@@ -347,13 +348,14 @@ def test_delete_record_unknown():
     # zone = Zone(zone_name="ci-cd.infrahouse.com")
     # assert zone.search_hostname("ip-10-1-102-189") == ["10.1.100.243"]
     mock_client = mock.Mock()
+    zone_id = "Z1234567890ABC"
 
     with (
         mock.patch.object(Zone, "search_hostname", side_effect=IHRecordNotFound) as mock_search_hostname,
         mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client),
         mock.patch.object(Zone, "_client", new_callable=mock.PropertyMock, return_value=mock_client) as mc,
     ):
-        zone = Zone(zone_name="foo.com", zone_id="foo_id")
+        zone = Zone(zone_name="foo.com", zone_id=zone_id)
         zone.delete_record("ip-10-1-102-189", "10.1.102.189")
         mock_search_hostname.assert_called_once_with("ip-10-1-102-189")
         mc.change_resource_record_sets.assert_not_called()
