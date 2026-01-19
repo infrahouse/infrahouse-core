@@ -16,8 +16,13 @@ from ec2_metadata import ec2_metadata
 
 from infrahouse_core.aws import get_client
 from infrahouse_core.timeout import timeout
+from infrahouse_core.validation import (
+    validate_instance_id,
+    validate_region,
+    validate_role_arn,
+)
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 class CommandStatus(Enum):
@@ -86,6 +91,12 @@ class EC2Instance:
                 DeprecationWarning,
                 stacklevel=2,
             )
+
+        # Validate input parameters
+        validate_instance_id(instance_id)
+        validate_region(region)
+        validate_role_arn(role_arn)
+
         self._instance_id = instance_id
         self._region = region
         self._ec2_client = ec2_client

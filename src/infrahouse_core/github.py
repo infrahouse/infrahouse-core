@@ -15,7 +15,7 @@ from requests import HTTPError, delete, get, post
 
 from infrahouse_core.aws import get_secret
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 @dataclass
