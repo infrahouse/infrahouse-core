@@ -20,7 +20,8 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Testing",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -50,6 +51,7 @@ dev = [
     "pytest ~= 8.3",
     "pytest-cov ~=7.0",
     "pylint ~=4.0",
+    "yamllint ~= 1.37",
 ]
 doc = [
     "Sphinx ~= 8.1"

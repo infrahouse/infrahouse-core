@@ -17,7 +17,7 @@ from ec2_metadata import ec2_metadata
 from infrahouse_core.aws import get_client
 from infrahouse_core.timeout import timeout
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 class CommandStatus(Enum):

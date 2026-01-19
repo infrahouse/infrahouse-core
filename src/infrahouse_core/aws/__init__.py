@@ -2,6 +2,7 @@
 AWS classes.
 """
 
+import hashlib
 import inspect
 import json
 import sys
@@ -40,10 +41,10 @@ VALUE_MAP = {
     "AWSSESSIONTOKEN": "SessionToken",
 }
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
-def assume_role(role_arn, region=None) -> dict:
+def assume_role(role_arn, region=None, session_name=None) -> dict:
     """
     Assume a given role and return a dictionary with credentials.
 
@@ -51,13 +52,26 @@ def assume_role(role_arn, region=None) -> dict:
     :type role_arn: str
     :param region: AWS region name.
     :type region: str
-    :return: A dictionary with three keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and
+    :param session_name: Session name for the assumed role. If None, auto-generated from caller context.
+    :type session_name: str
+    :return: A dictionary with three keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN
+    :rtype: dict
     """
+    if session_name is None:
+        # Auto-generate from caller context
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+        caller = frame.function
+        mod_name = module.__name__ if module else "infrahouse_core"
+        session_name = f"{mod_name}.{caller}"
+
     try:
-        LOG.debug("Assuming role %s", role_arn)
+        LOG.debug("Assuming role %s with session name %s", role_arn, session_name)
         client = boto3.client("sts", region_name=region)
-        response = client.assume_role(RoleArn=role_arn, RoleSessionName="ih-s3-reprepro-s3fs")
-        LOG.debug("Got credentials %r", response["Credentials"])
+        response = client.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
+        # AccessKeyId is not secret, log it for debugging
+        access_key_id = response["Credentials"]["AccessKeyId"]
+        LOG.debug("Successfully assumed role %s (AccessKeyId: %s)", role_arn, access_key_id)
         return {var: response["Credentials"].get(key) for var, key in VALUE_MAP.items()}
     except ClientError as err:
         LOG.error(err)
@@ -202,8 +216,11 @@ def get_secret(secretsmanager_client, secret_name):
     response = secretsmanager_client.get_secret_value(
         SecretId=secret_name,
     )
-    LOG.debug("get_secrets() = %s", pformat(response, indent=4))
-    return response["SecretString"]
+    # Log hash of secret value for verification without exposing the actual secret
+    secret_value = response["SecretString"]
+    secret_hash = hashlib.sha256(secret_value.encode()).hexdigest()[:16]
+    LOG.debug("Successfully retrieved secret '%s' (value hash: %s)", secret_name, secret_hash)
+    return secret_value
 
 
 def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: str = None):
