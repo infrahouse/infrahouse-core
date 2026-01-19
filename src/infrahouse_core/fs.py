@@ -5,7 +5,7 @@ InfraHouse Toolkit file system module.
 from logging import getLogger
 from os import chmod, stat
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 def ensure_permissions(path: str, permissions: int):

@@ -16,14 +16,31 @@ LOG = getLogger(__name__)
 
 class DynamoDBTable:
     """
+    DynamoDB table wrapper with distributed locking support.
+
     :param table_name: DynamoDB table name. It must exist.
     :type table_name: str
+    :param region: AWS region
+    :type region: str
+    :param role_arn: IAM role ARN to assume (currently not supported, will be added in future version)
+    :type role_arn: str
+
+    .. note::
+        role_arn parameter is accepted but not currently implemented.
+        This will be added in a future version.
     """
 
-    def __init__(self, table_name: str, region: str = None):
+    def __init__(self, table_name: str, region: str = None, role_arn: str = None):
         self._table_name = table_name
         self._region = region
-        self.__table = None
+        self._role_arn = role_arn
+        self._table_instance = None
+
+        if role_arn:
+            LOG.warning(
+                "role_arn parameter is not yet supported for DynamoDBTable and will be ignored. "
+                "This will be added in a future version."
+            )
 
     def delete_item(self, **kwargs):
         """Delete record from the table."""
@@ -88,7 +105,9 @@ class DynamoDBTable:
         self._table().put_item(**kwargs)
 
     def _table(self):
-        if self.__table is None:
-            self.__table = boto3.resource("dynamodb", region_name=self._region).Table(self._table_name)
-
-        return self.__table
+        if self._table_instance is None:
+            # TODO: Add role_arn support - requires session management # pylint: disable=fixme
+            resource = boto3.resource("dynamodb", region_name=self._region)
+            self._table_instance = resource.Table(self._table_name)
+            LOG.debug("Created DynamoDB table resource for %s", self._table_name)
+        return self._table_instance

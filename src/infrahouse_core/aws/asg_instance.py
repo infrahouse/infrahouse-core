@@ -3,10 +3,14 @@ Module for ASGInstance class - a class to describe and work with
 an instance that is a part of an Autoscaling group.
 """
 
+from logging import getLogger
+
 from cached_property import cached_property_with_ttl
 
 from infrahouse_core.aws import get_client
 from infrahouse_core.aws.ec2_instance import EC2Instance
+
+LOG = getLogger(__name__)
 
 
 class ASGInstance(EC2Instance):
@@ -14,6 +18,10 @@ class ASGInstance(EC2Instance):
     ASGInstance is an EC2 instance that is a part of an autoscaling group.
     Because it's an EC2 instance, ASGInstance inherits EC2Instance.
     """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._autoscaling_client_instance = None
 
     @property
     def lifecycle_state(self) -> str:
@@ -61,7 +69,11 @@ class ASGInstance(EC2Instance):
 
     @property
     def _autoscaling_client(self):
-        return get_client("autoscaling", region=self._region)
+        if self._autoscaling_client_instance is None:
+            # Use role_arn from parent EC2Instance class
+            self._autoscaling_client_instance = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+            LOG.debug("Created autoscaling client in %s region", self._autoscaling_client_instance.meta.region_name)
+        return self._autoscaling_client_instance
 
     @cached_property_with_ttl(ttl=10)
     def _describe_auto_scaling_instance(self):
