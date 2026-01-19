@@ -11,3 +11,19 @@ from infrahouse_core.exceptions import IHCoreException
 
 class IHAWSException(IHCoreException):
     """AWS related InfraHouse exception"""
+
+
+class IHDynamoDBException(IHAWSException):
+    """DynamoDB related InfraHouse exception"""
+
+
+class IHItemNotFound(IHDynamoDBException):
+    """Requested DynamoDB item doesn't exist"""
+
+
+class IHSecretsManagerException(IHAWSException):
+    """Secrets Manager related InfraHouse exception"""
+
+
+class IHSecretNotFound(IHSecretsManagerException):
+    """Requested secret doesn't exist"""

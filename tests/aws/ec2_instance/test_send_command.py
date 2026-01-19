@@ -1,4 +1,5 @@
 import logging
+import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,9 @@ from infrahouse_core.logging import setup_logging
 
 LOG = logging.getLogger()
 setup_logging(LOG, debug=True)
+
+# Skip these tests on Windows - timeout module uses SIGALRM which doesn't exist on Windows
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="timeout module uses SIGALRM (POSIX-only)")
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ from infrahouse_core.aws.ec2_instance import EC2Instance
 
 
 def test_ec2_client():
-
+    instance_id = "i-1234567890abcdef0"
     mock_client = Mock()
     mock_client.describe_instances.return_value = {
         "Reservations": [
@@ -20,6 +20,6 @@ def test_ec2_client():
         ],
     }
 
-    instance = EC2Instance("foo", ec2_client=mock_client)
+    instance = EC2Instance(instance_id, ec2_client=mock_client)
     assert instance.tags == {"Name": "foo-instance"}
-    mock_client.describe_instances.assert_called_once_with(InstanceIds=["foo"])
+    mock_client.describe_instances.assert_called_once_with(InstanceIds=[instance_id])
