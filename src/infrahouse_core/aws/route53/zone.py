@@ -7,6 +7,12 @@ from typing import List
 
 from infrahouse_core.aws import get_client
 from infrahouse_core.aws.route53.exceptions import IHRecordNotFound, IHZoneNotFound
+from infrahouse_core.validation import (
+    validate_dns_name,
+    validate_region,
+    validate_role_arn,
+    validate_zone_id,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -23,12 +29,21 @@ class Zone:
     :type zone_name: str
     """
 
-    def __init__(self, zone_id: str = None, zone_name: str = None, role_arn: str = None):
+    def __init__(self, zone_id: str = None, zone_name: str = None, region: str = None, role_arn: str = None):
         if zone_name is None and zone_id is None:
             raise RuntimeError("Either zone_id or zone_name must be passed. Both can't be None.")
+
+        # Validate input parameters
+        validate_zone_id(zone_id)
+        validate_dns_name(zone_name)
+        validate_region(region)
+        validate_role_arn(role_arn)
+
         self._zone_id = zone_id
         self._zone_name = zone_name
+        self._region = region
         self._role_arn = role_arn
+        self._client_instance = None
 
     @property
     def zone_id(self):
@@ -184,7 +199,10 @@ class Zone:
 
     @property
     def _client(self):
-        return get_client("route53", role_arn=self._role_arn)
+        if self._client_instance is None:
+            self._client_instance = get_client("route53", region=self._region, role_arn=self._role_arn)
+            LOG.debug("Created route53 client in %s region", self._client_instance.meta.region_name)
+        return self._client_instance
 
     def _get_record_ttl(self, hostname):
         full_name = f"{hostname}.{self.zone_name}"

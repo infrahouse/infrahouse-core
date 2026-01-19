@@ -108,3 +108,6 @@ ENV/
 .vscode/
 .idea/
 
+# Claude Code local settings
+.claude/*.local.json
+.claude/reviews/

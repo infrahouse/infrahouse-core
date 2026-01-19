@@ -18,3 +18,21 @@ def test_lock():
             ExpressionAttributeNames={"#r": "ResourceId"},
         )
         mock_delete.assert_called_once_with(Key={"ResourceId": "foo"})
+
+
+def test_lock_custom_key_name():
+    """Test lock() with a custom partition key name."""
+    t = DynamoDBTable("foo-table")
+    with (
+        mock.patch.object(DynamoDBTable, "put_item") as mock_put,
+        mock.patch.object(DynamoDBTable, "delete_item") as mock_delete,
+    ):
+        with t.lock("my-lock", key_name="pk"):
+            print("hello")
+
+        mock_put.assert_called_once_with(
+            Item={"pk": "my-lock"},
+            ConditionExpression="attribute_not_exists(#r)",
+            ExpressionAttributeNames={"#r": "pk"},
+        )
+        mock_delete.assert_called_once_with(Key={"pk": "my-lock"})

@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 from infrahouse_core.aws import get_client
 from infrahouse_core.aws.asg_instance import ASGInstance
 
-LOG = getLogger()
+LOG = getLogger(__name__)
 
 
 class ASG:
@@ -21,6 +21,7 @@ class ASG:
         self._asg_name = asg_name
         self._region = region
         self._role_arn = role_arn
+        self._autoscaling_client_instance = None
 
     @property
     def instance_refreshes(self) -> List[Dict]:
@@ -89,9 +90,10 @@ class ASG:
 
     @property
     def _autoscaling_client(self):
-        client = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
-        LOG.debug("Client in the %s region", client.meta.region_name)
-        return client
+        if self._autoscaling_client_instance is None:
+            self._autoscaling_client_instance = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+            LOG.debug("Created autoscaling client in %s region", self._autoscaling_client_instance.meta.region_name)
+        return self._autoscaling_client_instance
 
     @property
     def _describe_auto_scaling_groups(self):
