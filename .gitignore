@@ -111,3 +111,4 @@ ENV/
 # Claude Code local settings
 .claude/*.local.json
 .claude/reviews/
+nul

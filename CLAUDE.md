@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 InfraHouse Core is a lightweight Python library providing AWS and general-purpose utility classes. It's published on PyPI as `infrahouse-core`.
 
+## Platform Support
+
+This library targets Linux and macOS (POSIX systems) only. Windows is not supported and Windows compatibility issues should not be flagged in reviews.
+
 ## Development Commands
 
 ```bash
