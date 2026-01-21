@@ -5,6 +5,7 @@ Module for DynamoDB class.
 import contextlib
 from logging import getLogger
 from time import sleep, time
+from typing import Union
 
 from botocore.exceptions import ClientError
 
@@ -51,7 +52,13 @@ class DynamoDBTable:
         return item
 
     @contextlib.contextmanager
-    def lock(self, lock_name: str, timeout: int = 30, key_name: str = "ResourceId"):
+    def lock(
+        self,
+        lock_name: str,
+        timeout: int = 30,
+        ttl: Union[int, None] = 300,
+        key_name: str = "ResourceId",
+    ):
         """Global exclusive lock context manager.
 
         This function attempts to acquire a lock on a specific resource in the
@@ -59,23 +66,39 @@ class DynamoDBTable:
         the code within the 'with' block will execute. The lock is released after
         the block execution.
 
+        If a lock exists but has expired (based on TTL), it will be automatically
+        overwritten, allowing recovery from crashed processes that left stale locks.
+
         :param lock_name: The name of the lock (resource) to be acquired.
         :param timeout: Maximum time in seconds to attempt acquiring the lock.
+        :param ttl: Lock expiration time in seconds. If a process crashes while holding
+            the lock, other processes can acquire it after this time. Set to None to
+            disable TTL (not recommended). Default is 300 seconds (5 minutes).
         :param key_name: The partition key name in the DynamoDB table (default: "ResourceId").
         :raises RuntimeError: If the lock cannot be acquired within the timeout.
         :raises ClientError: If an unexpected error occurs while trying to acquire the lock.
         """
-        now = time()
+        start = time()
         while True:
-            if time() > now + timeout:
+            if time() > start + timeout:
                 raise RuntimeError(f"Failed to acquire lock '{lock_name}' after {timeout} seconds")
 
             try:
-                self.put_item(
-                    Item={key_name: lock_name},
-                    ConditionExpression="attribute_not_exists(#r)",
-                    ExpressionAttributeNames={"#r": key_name},
-                )
+                if ttl is not None:
+                    # With TTL: acquire if lock doesn't exist OR if it's expired
+                    self.put_item(
+                        Item={key_name: lock_name, "expires_at": int(time()) + ttl},
+                        ConditionExpression="attribute_not_exists(#r) OR #e < :now",
+                        ExpressionAttributeNames={"#r": key_name, "#e": "expires_at"},
+                        ExpressionAttributeValues={":now": int(time())},
+                    )
+                else:
+                    # Without TTL: only acquire if lock doesn't exist
+                    self.put_item(
+                        Item={key_name: lock_name},
+                        ConditionExpression="attribute_not_exists(#r)",
+                        ExpressionAttributeNames={"#r": key_name},
+                    )
                 LOG.info("Lock acquired: %s", lock_name)
                 break
             except ClientError as e:
