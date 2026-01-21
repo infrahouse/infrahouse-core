@@ -4,7 +4,7 @@ import uuid
 import boto3
 import pytest
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger()
 
 DYNAMODB_REGION = "us-west-1"
 
