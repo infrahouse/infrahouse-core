@@ -354,7 +354,7 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
     """
 
     session = Session()
-    sso_oidc = session.client("sso-oidc")
+    sso_oidc = session.client("sso-oidc", aws_config.get_sso_region(profile_name))
 
     try:
         client_creds = sso_oidc.register_client(
@@ -399,7 +399,7 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
                 clientId=client_creds["clientId"],
                 clientSecret=client_creds["clientSecret"],
             )
-            return session.client("sso").get_role_credentials(
+            return session.client("sso", region_name=aws_config.get_sso_region(profile_name)).get_role_credentials(
                 roleName=aws_config.get_role(profile_name),
                 accountId=aws_config.get_account_id(profile_name),
                 accessToken=token["accessToken"],
