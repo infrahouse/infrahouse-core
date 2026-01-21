@@ -2,7 +2,7 @@ import logging
 
 from infrahouse_core.logging import setup_logging
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger()
 
-
-setup_logging(LOG, debug=True, debug_botocore=False)
+setup_logging(LOG, debug_botocore=False)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
