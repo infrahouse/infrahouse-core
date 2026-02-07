@@ -75,6 +75,56 @@ class Zone:
 
         return self._zone_name
 
+    @property
+    def exists(self) -> bool:
+        """
+        Check whether the hosted zone currently exists.
+
+        :return: ``True`` if the zone exists, ``False`` otherwise.
+        """
+        try:
+            zone_id = self.zone_id
+        except IHZoneNotFound:
+            return False
+
+        try:
+            self._client.get_hosted_zone(Id=zone_id)
+            return True
+        except self._client.exceptions.NoSuchHostedZone:
+            return False
+
+    def delete(self) -> None:
+        """
+        Delete the hosted zone.
+
+        Deletes all non-NS/SOA record sets first, then deletes the zone
+        itself.  Idempotent -- does nothing if the zone does not exist.
+        """
+        try:
+            zone_id = self.zone_id
+        except IHZoneNotFound:
+            LOG.info("Route53 zone %s does not exist.", self._zone_name)
+            return
+
+        try:
+            # Delete all records except NS and SOA (required by AWS)
+            paginator = self._client.get_paginator("list_resource_record_sets")
+            for page in paginator.paginate(HostedZoneId=zone_id):
+                changes = []
+                for record_set in page["ResourceRecordSets"]:
+                    if record_set["Type"] not in ("NS", "SOA"):
+                        changes.append({"Action": "DELETE", "ResourceRecordSet": record_set})
+                if changes:
+                    self._client.change_resource_record_sets(
+                        HostedZoneId=zone_id,
+                        ChangeBatch={"Changes": changes},
+                    )
+
+            LOG.info("Deleting Route53 zone %s (%s)", self.zone_name, zone_id)
+            self._client.delete_hosted_zone(Id=zone_id)
+        except self._client.exceptions.NoSuchHostedZone:
+            LOG.info("Route53 zone %s does not exist.", self._zone_id or self._zone_name)
+
     def add_record(self, hostname: str, ip_address: str, ttl: int = 300):
         """
         Add A record.

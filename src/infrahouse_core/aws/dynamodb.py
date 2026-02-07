@@ -9,7 +9,7 @@ from typing import Union
 
 from botocore.exceptions import ClientError
 
-from infrahouse_core.aws import get_resource
+from infrahouse_core.aws import get_client, get_resource
 from infrahouse_core.aws.exceptions import IHItemNotFound
 
 LOG = getLogger(__name__)
@@ -32,6 +32,37 @@ class DynamoDBTable:
         self._region = region
         self._role_arn = role_arn
         self._table_instance = None
+        self._client_instance = None
+
+    @property
+    def exists(self) -> bool:
+        """
+        Check whether the DynamoDB table currently exists.
+
+        :return: ``True`` if the table exists, ``False`` otherwise.
+        """
+        try:
+            self._dynamodb_client.describe_table(TableName=self._table_name)
+            return True
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+                return False
+            raise
+
+    def delete(self) -> None:
+        """
+        Delete the DynamoDB table.
+
+        Idempotent -- does nothing if the table does not exist.
+        """
+        try:
+            self._dynamodb_client.delete_table(TableName=self._table_name)
+            LOG.info("Deleted DynamoDB table %s", self._table_name)
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ResourceNotFoundException":
+                LOG.info("DynamoDB table %s does not exist.", self._table_name)
+            else:
+                raise
 
     def delete_item(self, **kwargs):
         """Delete record from the table."""
@@ -116,6 +147,14 @@ class DynamoDBTable:
     def put_item(self, **kwargs):
         """Add record to the table."""
         self._table().put_item(**kwargs)
+
+    @property
+    def _dynamodb_client(self):
+        """Lazy-loaded low-level DynamoDB client (for describe/delete table operations)."""
+        if self._client_instance is None:
+            self._client_instance = get_client("dynamodb", role_arn=self._role_arn, region=self._region)
+            LOG.debug("Created DynamoDB client for %s", self._table_name)
+        return self._client_instance
 
     def _table(self):
         if self._table_instance is None:
