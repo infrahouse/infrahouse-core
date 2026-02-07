@@ -12,6 +12,14 @@ Subpackages
 Submodules
 ----------
 
+infrahouse\_core.aws.base module
+--------------------------------
+
+.. automodule:: infrahouse_core.aws.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.asg module
 -------------------------------
 

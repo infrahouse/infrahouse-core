@@ -202,6 +202,43 @@ class EC2Instance:
         # We want to expose them as a dictionary, where the key is the tag name and the value - the tag value.
         return {tag["Key"]: tag["Value"] for tag in self._describe_instance["Tags"]}
 
+    @property
+    def exists(self) -> bool:
+        """
+        Check whether the instance currently exists.
+
+        An instance is considered non-existent if its state is
+        ``terminated`` or ``shutting-down``, or if the describe call
+        fails with ``InvalidInstanceID.NotFound``.
+
+        :return: ``True`` if the instance exists and is not terminated.
+        """
+        try:
+            return self.state not in ("terminated", "shutting-down")
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "InvalidInstanceID.NotFound":
+                return False
+            raise
+
+    def delete(self) -> None:
+        """
+        Terminate the EC2 instance.
+
+        Idempotent — does nothing if the instance is already terminated
+        or does not exist.
+        """
+        try:
+            self.ec2_client.terminate_instances(InstanceIds=[self.instance_id])
+            LOG.info("Terminated instance %s", self.instance_id)
+        except ClientError as err:
+            error_code = err.response["Error"]["Code"]
+            if error_code == "InvalidInstanceID.NotFound":
+                LOG.info("Instance %s does not exist.", self.instance_id)
+            elif error_code == "OperationNotPermitted" and "terminated" in str(err).lower():
+                LOG.info("Instance %s is already terminated.", self.instance_id)
+            else:
+                raise
+
     def add_tag(self, key: str, value: str):
         """
         Add a tag to the EC2 instance.

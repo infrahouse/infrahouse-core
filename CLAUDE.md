@@ -60,5 +60,7 @@ The library is organized into two main areas under `src/infrahouse_core/`:
 ### Key Patterns
 - Classes accept optional `role_arn` parameter to assume IAM roles for cross-account access
 - AWS clients are lazily created using `get_client()` helper with optional role assumption
+- All AWS resource classes implement an `exists` property and idempotent `delete()` method (see `base.AWSResource` for the interface contract)
+- `delete()` methods use try/except (EAFP), not check-then-act, to avoid TOCTOU race conditions
 - Properties use `cached_property_with_ttl` for time-limited caching of API responses
 - Tests use `unittest.mock` to patch AWS API calls

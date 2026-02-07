@@ -3,6 +3,7 @@ import uuid
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 
 LOG = logging.getLogger()
 
@@ -15,17 +16,23 @@ def dynamodb_table():
     Create a temporary DynamoDB table for integration testing.
 
     Yields (table_name, region) tuple, then deletes the table after the test.
+    Skips the test if the current AWS credentials lack the required permissions.
     """
     table_name = f"test-lock-table-{uuid.uuid4().hex[:8]}"
     dynamodb = boto3.client("dynamodb", region_name=DYNAMODB_REGION)
 
     # Create table
-    dynamodb.create_table(
-        TableName=table_name,
-        KeySchema=[{"AttributeName": "ResourceId", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "ResourceId", "AttributeType": "S"}],
-        BillingMode="PAY_PER_REQUEST",
-    )
+    try:
+        dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[{"AttributeName": "ResourceId", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "ResourceId", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "AccessDeniedException":
+            pytest.skip(f"AWS credentials lack dynamodb:CreateTable permission: {exc}")
+        raise
 
     # Wait for table to be active
     waiter = dynamodb.get_waiter("table_exists")

@@ -42,6 +42,40 @@ class ASG:
             for instance in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Instances"]
         ]
 
+    @property
+    def exists(self) -> bool:
+        """
+        Check whether the autoscaling group currently exists.
+
+        :return: ``True`` if the ASG exists, ``False`` otherwise.
+        """
+        result = self._autoscaling_client.describe_auto_scaling_groups(
+            AutoScalingGroupNames=[self._asg_name],
+        )
+        return len(result["AutoScalingGroups"]) > 0
+
+    def delete(self, force_delete: bool = True) -> None:
+        """
+        Delete the autoscaling group.
+
+        Idempotent -- does nothing if the ASG does not exist.
+
+        :param force_delete: If True (default), force-delete the ASG
+            even if it has running instances.
+        :type force_delete: bool
+        """
+        try:
+            self._autoscaling_client.delete_auto_scaling_group(
+                AutoScalingGroupName=self._asg_name,
+                ForceDelete=force_delete,
+            )
+            LOG.info("Deleted ASG %s (force=%s)", self._asg_name, force_delete)
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ValidationError":
+                LOG.info("ASG %s does not exist.", self._asg_name)
+            else:
+                raise
+
     def cancel_instance_refresh(self):
         """Cancel all instance refreshes."""
         try:
