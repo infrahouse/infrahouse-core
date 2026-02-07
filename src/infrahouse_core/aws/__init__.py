@@ -414,8 +414,19 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
 # These imports MUST stay at the bottom of the module to avoid circular-import errors
 # (several submodules do ``from infrahouse_core.aws import get_client``).
 # pylint: disable=wrong-import-position,cyclic-import
+from infrahouse_core.aws.acm_certificate import ACMCertificate  # noqa: E402
 from infrahouse_core.aws.asg import ASG  # noqa: E402
 from infrahouse_core.aws.asg_instance import ASGInstance  # noqa: E402
+from infrahouse_core.aws.cloudfront_cache_policy import (  # noqa: E402
+    CloudFrontCachePolicy,
+)
+from infrahouse_core.aws.cloudfront_distribution import (  # noqa: E402
+    CloudFrontDistribution,
+)
+from infrahouse_core.aws.cloudfront_function import CloudFrontFunction  # noqa: E402
+from infrahouse_core.aws.cloudfront_response_headers_policy import (  # noqa: E402
+    CloudFrontResponseHeadersPolicy,
+)
 from infrahouse_core.aws.cloudwatch_log_group import CloudWatchLogGroup  # noqa: E402
 from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
 from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
@@ -437,9 +448,14 @@ from infrahouse_core.aws.sns_topic import SNSTopic  # noqa: E402
 from infrahouse_core.aws.sqs_queue import SQSQueue  # noqa: E402
 
 __all__ = [
+    "ACMCertificate",
     "ASG",
     "ASGInstance",
     "AWSConfig",
+    "CloudFrontCachePolicy",
+    "CloudFrontDistribution",
+    "CloudFrontFunction",
+    "CloudFrontResponseHeadersPolicy",
     "CloudWatchLogGroup",
     "DynamoDBTable",
     "EC2Instance",
