@@ -408,3 +408,35 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
             pass
 
     raise IHAWSException(f"The verification code isn't confirmed by user in {expires_in} seconds")
+
+
+# Re-export resource classes for convenient access via ``from infrahouse_core.aws import ...``.
+# These imports MUST stay at the bottom of the module to avoid circular-import errors
+# (several submodules do ``from infrahouse_core.aws import get_client``).
+# pylint: disable=wrong-import-position,cyclic-import
+from infrahouse_core.aws.asg import ASG  # noqa: E402
+from infrahouse_core.aws.asg_instance import ASGInstance  # noqa: E402
+from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
+from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
+from infrahouse_core.aws.iam_group import IAMGroup  # noqa: E402
+from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile  # noqa: E402
+from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
+from infrahouse_core.aws.iam_role import IAMRole  # noqa: E402
+from infrahouse_core.aws.iam_user import IAMUser  # noqa: E402
+from infrahouse_core.aws.route53.zone import Zone  # noqa: E402
+from infrahouse_core.aws.secretsmanager import Secret  # noqa: E402
+
+__all__ = [
+    "ASG",
+    "ASGInstance",
+    "AWSConfig",
+    "DynamoDBTable",
+    "EC2Instance",
+    "IAMGroup",
+    "IAMInstanceProfile",
+    "IAMPolicy",
+    "IAMRole",
+    "IAMUser",
+    "Secret",
+    "Zone",
+]
