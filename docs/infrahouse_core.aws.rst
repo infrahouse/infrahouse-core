@@ -68,10 +68,65 @@ infrahouse\_core.aws.exceptions module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.iam\_group module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.iam_group
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.iam\_instance\_profile module
+--------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.iam_instance_profile
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.iam\_policy module
+---------------------------------------
+
+.. automodule:: infrahouse_core.aws.iam_policy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.iam\_role module
+-------------------------------------
+
+.. automodule:: infrahouse_core.aws.iam_role
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.iam\_user module
+-------------------------------------
+
+.. automodule:: infrahouse_core.aws.iam_user
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.s3\_bucket module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.s3_bucket
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.secretsmanager module
+------------------------------------------
+
+.. automodule:: infrahouse_core.aws.secretsmanager
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
 .. automodule:: infrahouse_core.aws
-   :members:
-   :undoc-members:
+   :no-members:
    :show-inheritance:

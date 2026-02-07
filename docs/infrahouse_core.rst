@@ -36,6 +36,14 @@ infrahouse\_core.github module
    :show-inheritance:
    :undoc-members:
 
+infrahouse\_core.logging module
+-------------------------------
+
+.. automodule:: infrahouse_core.logging
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 infrahouse\_core.timeout module
 -------------------------------
 
