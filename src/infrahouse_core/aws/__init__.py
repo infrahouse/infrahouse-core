@@ -416,37 +416,47 @@ def _get_credentials(aws_config: AWSConfig, profile_name: str):
 # pylint: disable=wrong-import-position,cyclic-import
 from infrahouse_core.aws.asg import ASG  # noqa: E402
 from infrahouse_core.aws.asg_instance import ASGInstance  # noqa: E402
+from infrahouse_core.aws.cloudwatch_log_group import CloudWatchLogGroup  # noqa: E402
 from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
 from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
 from infrahouse_core.aws.elb_load_balancer import ELBLoadBalancer  # noqa: E402
 from infrahouse_core.aws.elb_target_group import ELBTargetGroup  # noqa: E402
+from infrahouse_core.aws.eventbridge_rule import EventBridgeRule  # noqa: E402
 from infrahouse_core.aws.iam_group import IAMGroup  # noqa: E402
 from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile  # noqa: E402
 from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
 from infrahouse_core.aws.iam_role import IAMRole  # noqa: E402
 from infrahouse_core.aws.iam_user import IAMUser  # noqa: E402
+from infrahouse_core.aws.lambda_function import LambdaFunction  # noqa: E402
 from infrahouse_core.aws.nat_gateway import NATGateway  # noqa: E402
 from infrahouse_core.aws.route53.zone import Zone  # noqa: E402
 from infrahouse_core.aws.s3_bucket import S3Bucket  # noqa: E402
 from infrahouse_core.aws.secretsmanager import Secret  # noqa: E402
 from infrahouse_core.aws.security_group import SecurityGroup  # noqa: E402
+from infrahouse_core.aws.sns_topic import SNSTopic  # noqa: E402
+from infrahouse_core.aws.sqs_queue import SQSQueue  # noqa: E402
 
 __all__ = [
     "ASG",
     "ASGInstance",
     "AWSConfig",
+    "CloudWatchLogGroup",
     "DynamoDBTable",
     "EC2Instance",
     "ELBLoadBalancer",
     "ELBTargetGroup",
+    "EventBridgeRule",
     "IAMGroup",
     "IAMInstanceProfile",
     "IAMPolicy",
     "IAMRole",
     "IAMUser",
+    "LambdaFunction",
     "NATGateway",
     "S3Bucket",
     "Secret",
     "SecurityGroup",
+    "SNSTopic",
+    "SQSQueue",
     "Zone",
 ]
