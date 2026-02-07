@@ -12,6 +12,14 @@ Subpackages
 Submodules
 ----------
 
+infrahouse\_core.aws.acm\_certificate module
+---------------------------------------------
+
+.. automodule:: infrahouse_core.aws.acm_certificate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.base module
 --------------------------------
 
@@ -32,6 +40,38 @@ infrahouse\_core.aws.asg\_instance module
 -----------------------------------------
 
 .. automodule:: infrahouse_core.aws.asg_instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.cloudfront\_cache\_policy module
+-----------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudfront_cache_policy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.cloudfront\_distribution module
+----------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudfront_distribution
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.cloudfront\_function module
+------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudfront_function
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.cloudfront\_response\_headers\_policy module
+-----------------------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudfront_response_headers_policy
    :members:
    :undoc-members:
    :show-inheritance:
