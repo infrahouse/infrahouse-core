@@ -36,6 +36,14 @@ infrahouse\_core.aws.asg\_instance module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.cloudwatch\_log\_group module
+--------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudwatch_log_group
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.config module
 ----------------------------------
 
@@ -72,6 +80,14 @@ infrahouse\_core.aws.elb\_target\_group module
 ----------------------------------------------
 
 .. automodule:: infrahouse_core.aws.elb_target_group
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.eventbridge\_rule module
+---------------------------------------------
+
+.. automodule:: infrahouse_core.aws.eventbridge_rule
    :members:
    :undoc-members:
    :show-inheritance:
@@ -132,6 +148,14 @@ infrahouse\_core.aws.iam\_user module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.lambda\_function module
+--------------------------------------------
+
+.. automodule:: infrahouse_core.aws.lambda_function
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.s3\_bucket module
 --------------------------------------
 
@@ -144,6 +168,22 @@ infrahouse\_core.aws.security\_group module
 -------------------------------------------
 
 .. automodule:: infrahouse_core.aws.security_group
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.sns\_topic module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.sns_topic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.sqs\_queue module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.sqs_queue
    :members:
    :undoc-members:
    :show-inheritance:
