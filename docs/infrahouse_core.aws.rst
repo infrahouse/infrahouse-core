@@ -60,6 +60,22 @@ infrahouse\_core.aws.ec2\_instance module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.elb\_load\_balancer module
+-----------------------------------------------
+
+.. automodule:: infrahouse_core.aws.elb_load_balancer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.elb\_target\_group module
+----------------------------------------------
+
+.. automodule:: infrahouse_core.aws.elb_target_group
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.exceptions module
 --------------------------------------
 

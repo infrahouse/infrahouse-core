@@ -418,6 +418,8 @@ from infrahouse_core.aws.asg import ASG  # noqa: E402
 from infrahouse_core.aws.asg_instance import ASGInstance  # noqa: E402
 from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
 from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
+from infrahouse_core.aws.elb_load_balancer import ELBLoadBalancer  # noqa: E402
+from infrahouse_core.aws.elb_target_group import ELBTargetGroup  # noqa: E402
 from infrahouse_core.aws.iam_group import IAMGroup  # noqa: E402
 from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile  # noqa: E402
 from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
@@ -435,6 +437,8 @@ __all__ = [
     "AWSConfig",
     "DynamoDBTable",
     "EC2Instance",
+    "ELBLoadBalancer",
+    "ELBTargetGroup",
     "IAMGroup",
     "IAMInstanceProfile",
     "IAMPolicy",
