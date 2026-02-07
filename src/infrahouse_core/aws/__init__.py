@@ -424,6 +424,7 @@ from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
 from infrahouse_core.aws.iam_role import IAMRole  # noqa: E402
 from infrahouse_core.aws.iam_user import IAMUser  # noqa: E402
 from infrahouse_core.aws.route53.zone import Zone  # noqa: E402
+from infrahouse_core.aws.s3_bucket import S3Bucket  # noqa: E402
 from infrahouse_core.aws.secretsmanager import Secret  # noqa: E402
 
 __all__ = [
@@ -437,6 +438,7 @@ __all__ = [
     "IAMPolicy",
     "IAMRole",
     "IAMUser",
+    "S3Bucket",
     "Secret",
     "Zone",
 ]
