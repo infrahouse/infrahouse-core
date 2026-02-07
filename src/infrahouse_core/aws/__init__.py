@@ -423,9 +423,11 @@ from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile  # noqa:
 from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
 from infrahouse_core.aws.iam_role import IAMRole  # noqa: E402
 from infrahouse_core.aws.iam_user import IAMUser  # noqa: E402
+from infrahouse_core.aws.nat_gateway import NATGateway  # noqa: E402
 from infrahouse_core.aws.route53.zone import Zone  # noqa: E402
 from infrahouse_core.aws.s3_bucket import S3Bucket  # noqa: E402
 from infrahouse_core.aws.secretsmanager import Secret  # noqa: E402
+from infrahouse_core.aws.security_group import SecurityGroup  # noqa: E402
 
 __all__ = [
     "ASG",
@@ -438,7 +440,9 @@ __all__ = [
     "IAMPolicy",
     "IAMRole",
     "IAMUser",
+    "NATGateway",
     "S3Bucket",
     "Secret",
+    "SecurityGroup",
     "Zone",
 ]

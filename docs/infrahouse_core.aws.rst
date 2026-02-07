@@ -68,6 +68,14 @@ infrahouse\_core.aws.exceptions module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.nat\_gateway module
+----------------------------------------
+
+.. automodule:: infrahouse_core.aws.nat_gateway
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.iam\_group module
 --------------------------------------
 
@@ -112,6 +120,14 @@ infrahouse\_core.aws.s3\_bucket module
 --------------------------------------
 
 .. automodule:: infrahouse_core.aws.s3_bucket
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.security\_group module
+-------------------------------------------
+
+.. automodule:: infrahouse_core.aws.security_group
    :members:
    :undoc-members:
    :show-inheritance:
