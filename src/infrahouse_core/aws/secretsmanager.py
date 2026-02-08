@@ -26,16 +26,20 @@ class Secret:
     :type role_arn: str
     """
 
-    def __init__(self, secret_name: str, region: str = None, role_arn: str = None):
+    def __init__(self, secret_name: str, region: str = None, role_arn: str = None, session=None):
         self._secret_name = secret_name
         self._region = region
         self._role_arn = role_arn
+        self._session = session
         self.__client = None
 
     def _client(self):
         """Lazily create and return the Secrets Manager client."""
         if self.__client is None:
-            self.__client = get_client("secretsmanager", role_arn=self._role_arn, region=self._region)
+            if self._session is not None:
+                self.__client = self._session.client("secretsmanager", region_name=self._region)
+            else:
+                self.__client = get_client("secretsmanager", role_arn=self._role_arn, region=self._region)
         return self.__client
 
     @property

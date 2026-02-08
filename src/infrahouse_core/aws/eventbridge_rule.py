@@ -25,8 +25,10 @@ class EventBridgeRule(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, rule_name, event_bus_name="default", region=None, role_arn=None):
-        super().__init__(rule_name, "events", region=region, role_arn=role_arn)
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self, rule_name, event_bus_name="default", region=None, role_arn=None, session=None
+    ):
+        super().__init__(rule_name, "events", region=region, role_arn=role_arn, session=session)
         self._event_bus_name = event_bus_name
 
     @property

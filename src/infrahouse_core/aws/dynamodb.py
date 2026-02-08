@@ -27,10 +27,11 @@ class DynamoDBTable:
     :type role_arn: str
     """
 
-    def __init__(self, table_name: str, region: str = None, role_arn: str = None):
+    def __init__(self, table_name: str, region: str = None, role_arn: str = None, session=None):
         self._table_name = table_name
         self._region = region
         self._role_arn = role_arn
+        self._session = session
         self._table_instance = None
         self._client_instance = None
 
@@ -152,13 +153,19 @@ class DynamoDBTable:
     def _dynamodb_client(self):
         """Lazy-loaded low-level DynamoDB client (for describe/delete table operations)."""
         if self._client_instance is None:
-            self._client_instance = get_client("dynamodb", role_arn=self._role_arn, region=self._region)
+            if self._session is not None:
+                self._client_instance = self._session.client("dynamodb", region_name=self._region)
+            else:
+                self._client_instance = get_client("dynamodb", role_arn=self._role_arn, region=self._region)
             LOG.debug("Created DynamoDB client for %s", self._table_name)
         return self._client_instance
 
     def _table(self):
         if self._table_instance is None:
-            resource = get_resource("dynamodb", role_arn=self._role_arn, region=self._region)
+            if self._session is not None:
+                resource = self._session.resource("dynamodb", region_name=self._region)
+            else:
+                resource = get_resource("dynamodb", role_arn=self._role_arn, region=self._region)
             self._table_instance = resource.Table(self._table_name)
             LOG.debug("Created DynamoDB table resource for %s", self._table_name)
         return self._table_instance

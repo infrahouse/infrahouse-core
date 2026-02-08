@@ -66,6 +66,7 @@ class EC2Instance:
         ec2_client: Session = None,
         ssm_client: Session = None,
         role_arn: str = None,
+        session: Session = None,
     ):
         """
         :param instance_id: Instance id. If omitted, the local instance is read from metadata.
@@ -78,6 +79,9 @@ class EC2Instance:
         :type ssm_client: Session
         :param role_arn: Use this IAM role to create boto3 clients.
         :type role_arn: str
+        :param session: Pre-configured ``boto3.Session``.  When provided, clients are
+            created from this session instead of via :func:`get_client`.
+        :type session: boto3.Session
         """
         if ec2_client is not None:
             warnings.warn(
@@ -102,6 +106,7 @@ class EC2Instance:
         self._ec2_client = ec2_client
         self._ssm_client = ssm_client
         self._role_arn = role_arn
+        self._session = session
 
     @property
     def availability_zone(self) -> str:
@@ -119,7 +124,10 @@ class EC2Instance:
         :return: Boto3 EC2 client.
         """
         if self._ec2_client is None:
-            self._ec2_client = get_client("ec2", region=self._region, role_arn=self._role_arn)
+            if self._session is not None:
+                self._ec2_client = self._session.client("ec2", region_name=self._region)
+            else:
+                self._ec2_client = get_client("ec2", region=self._region, role_arn=self._role_arn)
         return self._ec2_client
 
     @property
@@ -176,7 +184,10 @@ class EC2Instance:
         :return: Boto3 SSM client.
         """
         if self._ssm_client is None:
-            self._ssm_client = get_client("ssm", region=self._region, role_arn=self._role_arn)
+            if self._session is not None:
+                self._ssm_client = self._session.client("ssm", region_name=self._region)
+            else:
+                self._ssm_client = get_client("ssm", region=self._region, role_arn=self._role_arn)
         return self._ssm_client
 
     @property

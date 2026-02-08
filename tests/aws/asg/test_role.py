@@ -81,4 +81,6 @@ def test_instances():
     ):
         asg = ASG("foo-asg", role_arn="foo")
         assert len(asg.instances) > 0
-        mock_asg_instance.assert_called_once_with(instance_id="i-0d02e8a467749ad97", region=None, role_arn="foo")
+        mock_asg_instance.assert_called_once_with(
+            instance_id="i-0d02e8a467749ad97", region=None, role_arn="foo", session=None
+        )

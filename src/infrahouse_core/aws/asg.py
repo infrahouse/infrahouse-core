@@ -17,10 +17,11 @@ LOG = getLogger(__name__)
 class ASG:
     """AWS Autoscaling group."""
 
-    def __init__(self, asg_name: str, region: str = None, role_arn: str = None):
+    def __init__(self, asg_name: str, region: str = None, role_arn: str = None, session=None):
         self._asg_name = asg_name
         self._region = region
         self._role_arn = role_arn
+        self._session = session
         self._autoscaling_client_instance = None
 
     @property
@@ -38,7 +39,12 @@ class ASG:
         :return: List of EC2 instances in the autoscaling group.
         """
         return [
-            ASGInstance(instance_id=instance["InstanceId"], region=self._region, role_arn=self._role_arn)
+            ASGInstance(
+                instance_id=instance["InstanceId"],
+                region=self._region,
+                role_arn=self._role_arn,
+                session=self._session,
+            )
             for instance in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Instances"]
         ]
 
@@ -125,7 +131,12 @@ class ASG:
     @property
     def _autoscaling_client(self):
         if self._autoscaling_client_instance is None:
-            self._autoscaling_client_instance = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+            if self._session is not None:
+                self._autoscaling_client_instance = self._session.client("autoscaling", region_name=self._region)
+            else:
+                self._autoscaling_client_instance = get_client(
+                    "autoscaling", region=self._region, role_arn=self._role_arn
+                )
             LOG.debug("Created autoscaling client in %s region", self._autoscaling_client_instance.meta.region_name)
         return self._autoscaling_client_instance
 
