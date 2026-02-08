@@ -23,8 +23,8 @@ class SNSTopic(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, topic_arn, region=None, role_arn=None):
-        super().__init__(topic_arn, "sns", region=region, role_arn=role_arn)
+    def __init__(self, topic_arn, region=None, role_arn=None, session=None):
+        super().__init__(topic_arn, "sns", region=region, role_arn=role_arn, session=session)
 
     @property
     def topic_arn(self) -> str:

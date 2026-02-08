@@ -24,8 +24,8 @@ class CloudFrontResponseHeadersPolicy(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, policy_id, region=None, role_arn=None):
-        super().__init__(policy_id, "cloudfront", region=region, role_arn=role_arn)
+    def __init__(self, policy_id, region=None, role_arn=None, session=None):
+        super().__init__(policy_id, "cloudfront", region=region, role_arn=role_arn, session=session)
 
     @property
     def policy_id(self) -> str:

@@ -26,8 +26,8 @@ class SecurityGroup(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, group_id, region=None, role_arn=None):
-        super().__init__(group_id, "ec2", region=region, role_arn=role_arn)
+    def __init__(self, group_id, region=None, role_arn=None, session=None):
+        super().__init__(group_id, "ec2", region=region, role_arn=role_arn, session=session)
 
     @property
     def group_id(self) -> str:

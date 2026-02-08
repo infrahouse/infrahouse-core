@@ -70,8 +70,12 @@ class ASGInstance(EC2Instance):
     @property
     def _autoscaling_client(self):
         if self._autoscaling_client_instance is None:
-            # Use role_arn from parent EC2Instance class
-            self._autoscaling_client_instance = get_client("autoscaling", region=self._region, role_arn=self._role_arn)
+            if self._session is not None:
+                self._autoscaling_client_instance = self._session.client("autoscaling", region_name=self._region)
+            else:
+                self._autoscaling_client_instance = get_client(
+                    "autoscaling", region=self._region, role_arn=self._role_arn
+                )
             LOG.debug("Created autoscaling client in %s region", self._autoscaling_client_instance.meta.region_name)
         return self._autoscaling_client_instance
 

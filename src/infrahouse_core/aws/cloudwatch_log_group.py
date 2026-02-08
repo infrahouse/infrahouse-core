@@ -23,8 +23,8 @@ class CloudWatchLogGroup(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, log_group_name, region=None, role_arn=None):
-        super().__init__(log_group_name, "logs", region=region, role_arn=role_arn)
+    def __init__(self, log_group_name, region=None, role_arn=None, session=None):
+        super().__init__(log_group_name, "logs", region=region, role_arn=role_arn, session=session)
 
     @property
     def log_group_name(self) -> str:

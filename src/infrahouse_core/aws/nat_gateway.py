@@ -28,8 +28,8 @@ class NATGateway(AWSResource):
     :param role_arn: IAM role ARN for cross-account access.
     """
 
-    def __init__(self, nat_gateway_id, region=None, role_arn=None):
-        super().__init__(nat_gateway_id, "ec2", region=region, role_arn=role_arn)
+    def __init__(self, nat_gateway_id, region=None, role_arn=None, session=None):
+        super().__init__(nat_gateway_id, "ec2", region=region, role_arn=role_arn, session=session)
 
     @property
     def nat_gateway_id(self) -> str:
