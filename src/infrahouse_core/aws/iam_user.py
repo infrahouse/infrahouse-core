@@ -69,7 +69,9 @@ class IAMUser(AWSResource):
         paginator = self._client.get_paginator("list_groups_for_user")
         for page in paginator.paginate(UserName=self._resource_id):
             for group in page["Groups"]:
-                result.append(IAMGroup(group["GroupName"], region=self._region, role_arn=self._role_arn))
+                result.append(
+                    IAMGroup(group["GroupName"], region=self._region, role_arn=self._role_arn, session=self._session)
+                )
         return result
 
     # -- Policy operations ---------------------------------------------------
@@ -88,7 +90,9 @@ class IAMUser(AWSResource):
         paginator = self._client.get_paginator("list_attached_user_policies")
         for page in paginator.paginate(UserName=self._resource_id):
             for policy in page["AttachedPolicies"]:
-                policies.append(IAMPolicy(policy["PolicyArn"], region=self._region, role_arn=self._role_arn))
+                policies.append(
+                    IAMPolicy(policy["PolicyArn"], region=self._region, role_arn=self._role_arn, session=self._session)
+                )
         return policies
 
     def detach_policy(self, policy: IAMPolicy) -> None:

@@ -87,11 +87,17 @@ class IAMPolicy(AWSResource):
         paginator = self._client.get_paginator("list_entities_for_policy")
         for page in paginator.paginate(PolicyArn=self._resource_id):
             for role in page.get("PolicyRoles", []):
-                roles.append(IAMRole(role["RoleName"], region=self._region, role_arn=self._role_arn))
+                roles.append(
+                    IAMRole(role["RoleName"], region=self._region, role_arn=self._role_arn, session=self._session)
+                )
             for user in page.get("PolicyUsers", []):
-                users.append(IAMUser(user["UserName"], region=self._region, role_arn=self._role_arn))
+                users.append(
+                    IAMUser(user["UserName"], region=self._region, role_arn=self._role_arn, session=self._session)
+                )
             for group in page.get("PolicyGroups", []):
-                groups.append(IAMGroup(group["GroupName"], region=self._region, role_arn=self._role_arn))
+                groups.append(
+                    IAMGroup(group["GroupName"], region=self._region, role_arn=self._role_arn, session=self._session)
+                )
         self._attached_roles = roles
         self._attached_users = users
         self._attached_groups = groups

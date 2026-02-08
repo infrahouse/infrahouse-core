@@ -61,7 +61,7 @@ class IAMInstanceProfile(AWSResource):
         response = self._client.get_instance_profile(InstanceProfileName=self._resource_id)
         roles = response["InstanceProfile"]["Roles"]
         if roles:
-            return IAMRole(roles[0]["RoleName"], region=self._region, role_arn=self._role_arn)
+            return IAMRole(roles[0]["RoleName"], region=self._region, role_arn=self._role_arn, session=self._session)
         return None
 
     def delete(self) -> None:
