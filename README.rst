@@ -73,6 +73,12 @@ GitHub Integration
 * **GitHubActionsRunner** - Query runner status, labels, and metadata
 * Token generation from GitHub App credentials stored in AWS Secrets Manager
 
+Orchestrator
+~~~~~~~~~~~~~
+
+* **OrchestratorRaftCluster** - Reconcile MySQL Orchestrator Raft membership against an ASG
+* **OrchestratorRaftNode** - Interact with a single Orchestrator node's Raft API via SSM
+
 Utilities
 ~~~~~~~~~
 
@@ -173,6 +179,27 @@ Cross-Account AWS Access
     session = get_session(role_arn="arn:aws:iam::123456789012:role/MyRole")
     ec2 = session.client("ec2")
     s3 = session.client("s3")
+
+Orchestrator Raft Reconciliation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    from infrahouse_core.orchestrator import OrchestratorRaftCluster
+
+    cluster = OrchestratorRaftCluster(
+        "my-orchestrator-asg",
+        region="us-east-1",
+        role_arn="arn:aws:iam::123456789012:role/OrchestratorRole",  # optional
+    )
+
+    # Reconcile Raft peers with live ASG instances
+    # (removes stale peers, adds missing ones)
+    cluster.reconcile()
+
+    # Inspect current state
+    for node in cluster.nodes:
+        print(f"{node.hostname}: leader={node.is_leader}")
 
 GitHub Actions Runner Management
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

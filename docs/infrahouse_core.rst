@@ -8,6 +8,7 @@ Subpackages
    :maxdepth: 4
 
    infrahouse_core.aws
+   infrahouse_core.orchestrator
 
 Submodules
 ----------
