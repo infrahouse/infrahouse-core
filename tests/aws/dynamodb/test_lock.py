@@ -7,10 +7,16 @@ from infrahouse_core.aws.dynamodb import DynamoDBTable
 
 
 def _has_aws_credentials():
-    """Check if AWS credentials are available."""
+    """Check if valid AWS credentials are available."""
     try:
-        credentials = boto3.Session().get_credentials()
-        return credentials is not None
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        if credentials is None:
+            return False
+        # Verify the credentials actually work
+        sts = session.client("sts")
+        sts.get_caller_identity()
+        return True
     except Exception:
         return False
 

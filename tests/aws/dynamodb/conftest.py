@@ -30,8 +30,9 @@ def dynamodb_table():
             BillingMode="PAY_PER_REQUEST",
         )
     except ClientError as exc:
-        if exc.response["Error"]["Code"] == "AccessDeniedException":
-            pytest.skip(f"AWS credentials lack dynamodb:CreateTable permission: {exc}")
+        error_code = exc.response["Error"]["Code"]
+        if error_code in ("AccessDeniedException", "UnrecognizedClientException"):
+            pytest.skip(f"AWS credentials not usable ({error_code}): {exc}")
         raise
 
     # Wait for table to be active

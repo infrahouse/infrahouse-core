@@ -264,6 +264,77 @@ def test_reconcile_raises_on_remove_error():
             cluster.reconcile()
 
 
+def test_leader_found_by_ip():
+    """leader matches when Raft returns IP addresses instead of hostnames (issue #105)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    node1 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node1.hostname = "ip-10-1-1-1"
+    node1.private_ip = "10.1.1.1"
+    node1.raft_leader = "10.1.1.2:10008"
+    node2 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node2.hostname = "ip-10-1-1-2"
+    node2.private_ip = "10.1.1.2"
+    node2.raft_leader = "10.1.1.2:10008"
+    with mock.patch.object(
+        OrchestratorRaftCluster, "nodes", new_callable=mock.PropertyMock, return_value=[node1, node2]
+    ):
+        leader = cluster.leader
+        assert leader.hostname == "ip-10-1-1-2"
+
+
+def test_peers_returns_nodes_by_ip():
+    """peers matches live nodes when Raft uses IP addresses (issue #105)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    mock_leader = mock.MagicMock(spec=OrchestratorRaftNode)
+    mock_leader.raft_peers = ["10.1.1.1:10008", "10.1.1.2:10008"]
+    node1 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node1.hostname = "ip-10-1-1-1"
+    node1.private_ip = "10.1.1.1"
+    node2 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node2.hostname = "ip-10-1-1-2"
+    node2.private_ip = "10.1.1.2"
+    with (
+        mock.patch.object(OrchestratorRaftCluster, "leader", new_callable=mock.PropertyMock, return_value=mock_leader),
+        mock.patch.object(
+            OrchestratorRaftCluster, "nodes", new_callable=mock.PropertyMock, return_value=[node1, node2]
+        ),
+    ):
+        peers = cluster.peers
+        assert len(peers) == 2
+        assert peers[0] is node1
+        assert peers[1] is node2
+
+
+def test_reconcile_with_ip_addresses():
+    """reconcile works when Raft uses IP addresses (issue #105)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    mock_leader = mock.MagicMock(spec=OrchestratorRaftNode)
+    mock_leader.raft_peers = ["10.1.1.1:10008", "10.1.1.2:10008", "10.1.1.99:10008"]
+    node1 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node1.hostname = "ip-10-1-1-1"
+    node1.private_ip = "10.1.1.1"
+    node2 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node2.hostname = "ip-10-1-1-2"
+    node2.private_ip = "10.1.1.2"
+    node3 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node3.hostname = "ip-10-1-1-3"
+    node3.private_ip = "10.1.1.3"
+    with (
+        mock.patch.object(OrchestratorRaftCluster, "leader", new_callable=mock.PropertyMock, return_value=mock_leader),
+        mock.patch.object(
+            OrchestratorRaftCluster, "nodes", new_callable=mock.PropertyMock, return_value=[node1, node2, node3]
+        ),
+    ):
+        cluster.reconcile()
+    # Stale peer 10.1.1.99 removed
+    mock_leader.remove_peer.assert_called_once()
+    removed_node = mock_leader.remove_peer.call_args[0][0]
+    assert isinstance(removed_node, OrchestratorRaftNode)
+    assert removed_node.peer_addr == "10.1.1.99:10008"
+    # Missing node3 added
+    mock_leader.add_peer.assert_called_once_with(node3)
+
+
 def test_asg_session_propagated():
     """The ASG instance receives the session from the cluster."""
     mock_session = mock.MagicMock()
