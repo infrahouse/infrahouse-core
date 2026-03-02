@@ -164,9 +164,10 @@ class EC2Instance:
     @property
     def private_ip(self):
         """
-        :return: Instance's private IP address
+        :return: Instance's private IP address.
+            Can be None if the instance is in a transitional lifecycle state.
         """
-        return self._describe_instance["PrivateIpAddress"]
+        return self._describe_instance.get("PrivateIpAddress")
 
     @property
     def public_ip(self):
