@@ -89,7 +89,9 @@ class OrchestratorRaftCluster:
         """
         lookup = {}
         for node in nodes:
-            lookup[node.private_ip] = node
+            ip = node.private_ip
+            if ip is not None:
+                lookup[ip] = node
             lookup[node.hostname] = node
         return lookup
 
