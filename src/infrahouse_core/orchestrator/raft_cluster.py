@@ -79,6 +79,20 @@ class OrchestratorRaftCluster:
             for instance in self._asg.instances
         ]
 
+    def _node_lookup(self, nodes):
+        """Build a dict mapping both private_ip and hostname to each node.
+
+        Raft may identify peers by IP address (e.g. ``"10.1.100.195"``) or by
+        short hostname (e.g. ``"ip-10-1-100-195"``).  This lookup supports both.
+
+        :rtype: dict[str, OrchestratorRaftNode]
+        """
+        lookup = {}
+        for node in nodes:
+            lookup[node.private_ip] = node
+            lookup[node.hostname] = node
+        return lookup
+
     @property
     def leader(self):
         """Return the :class:`OrchestratorRaftNode` that is the current Raft leader.
@@ -89,7 +103,9 @@ class OrchestratorRaftCluster:
         :rtype: OrchestratorRaftNode
         :raises IHRaftLeaderNotFound: If no node reports a leader.
         """
-        for node in self.nodes:
+        nodes = self.nodes
+        lookup = self._node_lookup(nodes)
+        for node in nodes:
             try:
                 leader_addr = node.raft_leader
             except IHRaftPeerError:
@@ -97,10 +113,10 @@ class OrchestratorRaftCluster:
                 continue
             if leader_addr is not None:
                 leader_host = leader_addr.split(":")[0]
-                for candidate in self.nodes:
-                    if candidate.hostname == leader_host:
-                        LOG.info("Found Raft leader at %s", leader_host)
-                        return candidate
+                candidate = lookup.get(leader_host)
+                if candidate is not None:
+                    LOG.info("Found Raft leader at %s", leader_host)
+                    return candidate
                 LOG.warning(
                     "Leader %s is not in the current ASG instance list.",
                     leader_addr,
@@ -117,10 +133,9 @@ class OrchestratorRaftCluster:
 
         :rtype: list[OrchestratorRaftNode]
         """
-        nodes_by_hostname = {node.hostname: node for node in self.nodes}
+        lookup = self._node_lookup(self.nodes)
         return [
-            nodes_by_hostname.get(addr.split(":")[0], OrchestratorRaftNode.from_peer_addr(addr))
-            for addr in self.leader.raft_peers
+            lookup.get(addr.split(":")[0], OrchestratorRaftNode.from_peer_addr(addr)) for addr in self.leader.raft_peers
         ]
 
     def add_peer(self, node):
@@ -157,23 +172,31 @@ class OrchestratorRaftCluster:
         leader = self.leader
         LOG.info("Reconciling Raft peers via leader %s", leader.hostname)
 
-        nodes_by_hostname = {node.hostname: node for node in self.nodes}
-        LOG.debug("Live ASG hostnames: %s", set(nodes_by_hostname))
+        live_nodes = self.nodes
+        LOG.debug("Live ASG instances: %s", [node.hostname for node in live_nodes])
 
-        raft_peers_by_hostname = {
-            addr.split(":")[0]: OrchestratorRaftNode.from_peer_addr(addr) for addr in leader.raft_peers
-        }
-        LOG.debug("Current Raft peer hostnames: %s", set(raft_peers_by_hostname))
+        # Build a map of raft host -> stale node for peers not in the ASG
+        raft_peer_addrs = {}
+        for addr in leader.raft_peers:
+            host = addr.split(":")[0]
+            raft_peer_addrs[host] = OrchestratorRaftNode.from_peer_addr(addr)
+        LOG.debug("Current Raft peer hosts: %s", set(raft_peer_addrs))
 
-        stale_hostnames = set(raft_peers_by_hostname) - set(nodes_by_hostname)
-        missing_hostnames = set(nodes_by_hostname) - set(raft_peers_by_hostname)
+        stale_hosts = (
+            set(raft_peer_addrs) - {node.private_ip for node in live_nodes} - {node.hostname for node in live_nodes}
+        )
+        missing_nodes = [
+            node
+            for node in live_nodes
+            if node.private_ip not in raft_peer_addrs and node.hostname not in raft_peer_addrs
+        ]
 
-        for hostname in stale_hostnames:
-            LOG.info("Removing stale Raft peer %s", hostname)
-            self.remove_peer(raft_peers_by_hostname[hostname])
+        for host in stale_hosts:
+            LOG.info("Removing stale Raft peer %s", host)
+            self.remove_peer(raft_peer_addrs[host])
 
-        for hostname in missing_hostnames:
-            LOG.info("Adding missing Raft peer %s", hostname)
-            self.add_peer(nodes_by_hostname[hostname])
+        for node in missing_nodes:
+            LOG.info("Adding missing Raft peer %s", node.hostname)
+            self.add_peer(node)
 
-        LOG.info("Raft reconcile complete: removed=%d added=%d", len(stale_hostnames), len(missing_hostnames))
+        LOG.info("Raft reconcile complete: removed=%d added=%d", len(stale_hosts), len(missing_nodes))
