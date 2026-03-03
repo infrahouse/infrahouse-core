@@ -123,7 +123,7 @@ class OrchestratorRaftCluster:
         for node in nodes:
             try:
                 leader_addr = node.raft_leader
-            except IHRaftPeerError:
+            except (IHRaftPeerError, TimeoutError, RuntimeError):
                 LOG.warning("Could not reach node %s, skipping.", node.hostname)
                 continue
             if leader_addr is not None:

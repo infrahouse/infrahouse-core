@@ -281,6 +281,40 @@ def test_reconcile_raises_on_remove_error():
             cluster.reconcile()
 
 
+def test_leader_skips_timeout_error():
+    """leader skips nodes that raise TimeoutError (issue #111)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    node1 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node1.hostname = "ip-10-1-1-1"
+    type(node1).raft_leader = mock.PropertyMock(side_effect=TimeoutError("timed out"))
+    node2 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node2.hostname = "ip-10-1-1-2"
+    node2.raft_leader = "ip-10-1-1-2:10008"
+    with mock.patch.object(
+        OrchestratorRaftCluster, "nodes", new_callable=mock.PropertyMock, return_value=[node1, node2]
+    ):
+        leader = cluster.leader
+        assert leader.hostname == "ip-10-1-1-2"
+
+
+def test_leader_skips_runtime_error():
+    """leader skips nodes that raise RuntimeError from terminated instances (issue #111)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    node1 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node1.hostname = "ip-10-1-1-1"
+    type(node1).raft_leader = mock.PropertyMock(
+        side_effect=RuntimeError("Instance i-123 is terminated — SSM will never connect")
+    )
+    node2 = mock.MagicMock(spec=OrchestratorRaftNode)
+    node2.hostname = "ip-10-1-1-2"
+    node2.raft_leader = "ip-10-1-1-2:10008"
+    with mock.patch.object(
+        OrchestratorRaftCluster, "nodes", new_callable=mock.PropertyMock, return_value=[node1, node2]
+    ):
+        leader = cluster.leader
+        assert leader.hostname == "ip-10-1-1-2"
+
+
 def test_leader_found_by_ip():
     """leader matches when Raft returns IP addresses instead of hostnames (issue #105)."""
     cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
