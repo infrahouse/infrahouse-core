@@ -23,6 +23,12 @@ def ec2_instance(monkeypatch):
     instance = EC2Instance(instance_id="i-1234567890abcdef", region="us-east-1")
     # Override the ssm_client with a MagicMock to intercept calls.
     instance._ssm_client = MagicMock()
+    # Mock ec2_client so state checks don't hit real AWS (default: pending).
+    mock_ec2 = MagicMock()
+    mock_ec2.describe_instances.return_value = {
+        "Reservations": [{"Instances": [{"State": {"Name": "pending"}}]}]
+    }
+    instance._ec2_client = mock_ec2
     return instance
 
 
@@ -54,9 +60,55 @@ def test_send_command_retry_then_success(ec2_instance):
     assert ec2_instance._ssm_client.send_command.call_count == 2
 
 
-# def test_execute_command():
-#     ec2_instance = EC2Instance()
-#     exec_code, stdout, stderr = ec2_instance.execute_command("echo hello")
-#     assert exec_code == 0
-#     assert stdout == "hello\n"
-#     assert stderr == ""
+def test_send_command_raises_on_terminated_instance(ec2_instance, monkeypatch):
+    """_send_command raises RuntimeError immediately when instance is terminated (issue #111)."""
+    error_response = {"Error": {"Code": "InvalidInstanceId", "Message": "Instance not ready"}}
+    client_error = ClientError(error_response, "send_command")
+    ec2_instance._ssm_client.send_command.side_effect = client_error
+
+    # Mock the ec2_client so that describe_instances reports a terminated state.
+    mock_ec2 = MagicMock()
+    mock_ec2.describe_instances.return_value = {
+        "Reservations": [
+            {
+                "Instances": [
+                    {
+                        "State": {"Name": "terminated"},
+                    }
+                ]
+            }
+        ]
+    }
+    ec2_instance._ec2_client = mock_ec2
+
+    with pytest.raises(RuntimeError, match="terminated"):
+        ec2_instance._send_command("echo hello")
+
+    # Should only attempt send_command once before checking state and raising.
+    assert ec2_instance._ssm_client.send_command.call_count == 1
+
+
+def test_send_command_raises_on_shutting_down_instance(ec2_instance, monkeypatch):
+    """_send_command raises RuntimeError immediately when instance is shutting-down (issue #111)."""
+    error_response = {"Error": {"Code": "InvalidInstanceId", "Message": "Instance not ready"}}
+    client_error = ClientError(error_response, "send_command")
+    ec2_instance._ssm_client.send_command.side_effect = client_error
+
+    mock_ec2 = MagicMock()
+    mock_ec2.describe_instances.return_value = {
+        "Reservations": [
+            {
+                "Instances": [
+                    {
+                        "State": {"Name": "shutting-down"},
+                    }
+                ]
+            }
+        ]
+    }
+    ec2_instance._ec2_client = mock_ec2
+
+    with pytest.raises(RuntimeError, match="shutting-down"):
+        ec2_instance._send_command("echo hello")
+
+    assert ec2_instance._ssm_client.send_command.call_count == 1

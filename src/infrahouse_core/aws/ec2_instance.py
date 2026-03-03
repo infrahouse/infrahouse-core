@@ -340,6 +340,12 @@ class EC2Instance:
 
                 except ClientError as e:
                     if e.response["Error"]["Code"] == "InvalidInstanceId":
+                        # Check if the instance is terminated — no point retrying
+                        state = self.state
+                        if state in ("terminated", "shutting-down"):
+                            raise RuntimeError(
+                                f"Instance {self.instance_id} is {state} — SSM will never connect"
+                            ) from e
                         LOG.warning("Instance is not ready yet. Retrying in %d seconds.", delay)
                         sleep(delay)
                         delay = min(delay * 2, 30)  # increase delay exponentially, capped at 30 seconds
