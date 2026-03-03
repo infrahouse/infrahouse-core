@@ -13,11 +13,12 @@ from infrahouse_core.orchestrator.raft_cluster import OrchestratorRaftCluster
 from infrahouse_core.orchestrator.raft_node import OrchestratorRaftNode
 
 
-def _mock_asg_instance(private_ip, hostname):
+def _mock_asg_instance(private_ip, hostname, lifecycle_state="InService"):
     """Helper to create a mock ASGInstance."""
     inst = mock.MagicMock()
     inst.private_ip = private_ip
     inst.hostname = hostname
+    inst.lifecycle_state = lifecycle_state
     return inst
 
 
@@ -37,6 +38,22 @@ def test_nodes_from_asg():
         # Each node wraps the original ASGInstance
         assert nodes[0].instance is instances[0]
         assert nodes[1].instance is instances[1]
+
+
+def test_nodes_skips_pending_instances():
+    """nodes excludes instances in Pending states (issue #109)."""
+    cluster = OrchestratorRaftCluster("my-asg", region="us-east-1")
+    instances = [
+        _mock_asg_instance("10.1.1.1", "ip-10-1-1-1", lifecycle_state="InService"),
+        _mock_asg_instance("10.1.1.2", "ip-10-1-1-2", lifecycle_state="Pending:Wait"),
+        _mock_asg_instance("10.1.1.3", "ip-10-1-1-3", lifecycle_state="Terminating:Wait"),
+    ]
+    with mock.patch.object(OrchestratorRaftCluster, "_asg", new_callable=mock.PropertyMock) as mock_asg:
+        mock_asg.return_value.instances = instances
+        nodes = cluster.nodes
+        assert len(nodes) == 2
+        hostnames = {n.hostname for n in nodes}
+        assert hostnames == {"ip-10-1-1-1", "ip-10-1-1-3"}
 
 
 def test_leader_found():

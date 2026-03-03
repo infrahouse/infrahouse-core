@@ -64,9 +64,21 @@ class OrchestratorRaftCluster:
             )
         return self._asg_instance
 
+    _SKIP_LIFECYCLE_STATES = frozenset(
+        {
+            "Pending",
+            "Pending:Wait",
+            "Pending:Proceed",
+            "Terminated",
+        }
+    )
+
     @property
     def nodes(self):
-        """Return an :class:`OrchestratorRaftNode` for each live ASG instance.
+        """Return an :class:`OrchestratorRaftNode` for each queryable ASG instance.
+
+        Instances in early lifecycle states (``Pending``, ``Pending:Wait``, etc.)
+        are excluded because they have no SSM agent or Orchestrator running yet.
 
         :rtype: list[OrchestratorRaftNode]
         """
@@ -77,6 +89,7 @@ class OrchestratorRaftCluster:
                 raft_port=self._raft_port,
             )
             for instance in self._asg.instances
+            if instance.lifecycle_state not in self._SKIP_LIFECYCLE_STATES
         ]
 
     def _node_lookup(self, nodes):
