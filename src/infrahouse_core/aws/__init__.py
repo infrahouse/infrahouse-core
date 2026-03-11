@@ -130,7 +130,7 @@ def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) ->
         LOG.info("Available profiles:\n\t%s", "\n\t".join(aws_config.profiles))
         sys.exit(1)
 
-    return boto3.Session(region_name=aws_region)
+    return boto3.Session(region_name=aws_region, profile_name=aws_profile)
 
 
 def get_session(role_arn=None, region=None, session_name=None):
