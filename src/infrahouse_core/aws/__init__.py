@@ -98,6 +98,11 @@ def get_aws_client(service_name: str, profile: str, region: str, session=None):
     return session.client(service_name)  # type: ignore[arg-type]
 
 
+def _has_env_credentials() -> bool:
+    """Return True if AWS credentials are present in environment variables."""
+    return bool(environ.get("AWS_ACCESS_KEY_ID") and environ.get("AWS_SECRET_ACCESS_KEY"))
+
+
 def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) -> Session:
     """
 
@@ -106,7 +111,7 @@ def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) ->
     :param aws_region:
     :return: Authenticated AWS session, or None if boto3 can connect to AWS without extra steps.
     """
-    if aws_profile is None and "default" in aws_config.profiles:
+    if aws_profile is None and not _has_env_credentials() and "default" in aws_config.profiles:
         aws_profile = "default"
 
     try:
