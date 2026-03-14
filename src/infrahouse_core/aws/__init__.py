@@ -435,6 +435,8 @@ from infrahouse_core.aws.cloudfront_response_headers_policy import (  # noqa: E4
 from infrahouse_core.aws.cloudwatch_log_group import CloudWatchLogGroup  # noqa: E402
 from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
 from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
+from infrahouse_core.aws.ecr_repository import ECRImage, ECRRepository  # noqa: E402
+from infrahouse_core.aws.ecs_service import ECSService  # noqa: E402
 from infrahouse_core.aws.elb_load_balancer import ELBLoadBalancer  # noqa: E402
 from infrahouse_core.aws.elb_target_group import ELBTargetGroup  # noqa: E402
 from infrahouse_core.aws.eventbridge_rule import EventBridgeRule  # noqa: E402
@@ -464,6 +466,9 @@ __all__ = [
     "CloudWatchLogGroup",
     "DynamoDBTable",
     "EC2Instance",
+    "ECRImage",
+    "ECRRepository",
+    "ECSService",
     "ELBLoadBalancer",
     "ELBTargetGroup",
     "EventBridgeRule",
