@@ -30,9 +30,7 @@ def test_exists_true():
         "ETag": "ETAG1",
     }
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert policy.exists is True
         mock_client.get_cache_policy.assert_called_once_with(Id=POLICY_ID)
 
@@ -43,9 +41,7 @@ def test_exists_not_found():
     mock_client = mock.MagicMock()
     mock_client.get_cache_policy.side_effect = _make_client_error("NoSuchCachePolicy")
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert policy.exists is False
 
 
@@ -55,9 +51,7 @@ def test_exists_unexpected_error():
     mock_client = mock.MagicMock()
     mock_client.get_cache_policy.side_effect = _make_client_error("AccessDenied")
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         with pytest.raises(ClientError) as exc_info:
             _ = policy.exists
         assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
@@ -72,9 +66,7 @@ def test_delete():
         "ETag": "ETAG1",
     }
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         policy.delete()
 
     mock_client.delete_cache_policy.assert_called_once_with(Id=POLICY_ID, IfMatch="ETAG1")
@@ -86,9 +78,7 @@ def test_delete_not_found():
     mock_client = mock.MagicMock()
     mock_client.get_cache_policy.side_effect = _make_client_error("NoSuchCachePolicy")
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         policy.delete()  # Should not raise
 
     mock_client.delete_cache_policy.assert_not_called()
@@ -104,9 +94,7 @@ def test_delete_in_use():
     }
     mock_client.delete_cache_policy.side_effect = _make_client_error("CachePolicyInUse")
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         with pytest.raises(ClientError) as exc_info:
             policy.delete()
         assert exc_info.value.response["Error"]["Code"] == "CachePolicyInUse"
@@ -118,9 +106,7 @@ def test_delete_unexpected_error():
     mock_client = mock.MagicMock()
     mock_client.get_cache_policy.side_effect = _make_client_error("AccessDenied")
 
-    with mock.patch.object(
-        CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client
-    ):
+    with mock.patch.object(CloudFrontCachePolicy, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         with pytest.raises(ClientError) as exc_info:
             policy.delete()
         assert exc_info.value.response["Error"]["Code"] == "AccessDenied"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 """Tests for `infrahouse_core` package."""
+
 import pytest
 
 

@@ -38,9 +38,7 @@ def test_exists_true():
     """exists returns True when an exact match is found."""
     lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.get_paginator.return_value = _mock_paginator(
-        [{"logGroups": [{"logGroupName": LOG_GROUP_NAME}]}]
-    )
+    mock_client.get_paginator.return_value = _mock_paginator([{"logGroups": [{"logGroupName": LOG_GROUP_NAME}]}])
 
     with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert lg.exists is True

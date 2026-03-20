@@ -25,9 +25,7 @@ def test_exists_true():
     """exists returns True when the certificate is found."""
     cert = ACMCertificate(CERT_ARN, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_certificate.return_value = {
-        "Certificate": {"CertificateArn": CERT_ARN}
-    }
+    mock_client.describe_certificate.return_value = {"Certificate": {"CertificateArn": CERT_ARN}}
 
     with mock.patch.object(ACMCertificate, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert cert.exists is True

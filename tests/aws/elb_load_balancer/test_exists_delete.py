@@ -31,9 +31,7 @@ def test_exists_true():
     """exists returns True when the load balancer is found."""
     lb = ELBLoadBalancer(LB_ARN, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_load_balancers.return_value = {
-        "LoadBalancers": [{"LoadBalancerArn": LB_ARN}]
-    }
+    mock_client.describe_load_balancers.return_value = {"LoadBalancers": [{"LoadBalancerArn": LB_ARN}]}
 
     with mock.patch.object(ELBLoadBalancer, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert lb.exists is True
