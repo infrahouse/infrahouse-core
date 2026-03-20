@@ -45,7 +45,7 @@ class ECRImage:
         try:
             response = self._client.describe_images(
                 repositoryName=self._repository_name,
-                imageIds=[self._image_id],
+                imageIds=[self.image_id],
             )
             return bool(response.get("imageDetails"))
         except ClientError as err:
@@ -63,7 +63,7 @@ class ECRImage:
         try:
             response = self._client.describe_images(
                 repositoryName=self._repository_name,
-                imageIds=[self._image_id],
+                imageIds=[self.image_id],
             )
             if response.get("imageDetails"):
                 return response["imageDetails"][0].get("imageTags", [])
@@ -82,7 +82,7 @@ class ECRImage:
         try:
             response = self._client.describe_images(
                 repositoryName=self._repository_name,
-                imageIds=[self._image_id],
+                imageIds=[self.image_id],
             )
             if response.get("imageDetails"):
                 return response["imageDetails"][0].get("imageDigest")
@@ -92,9 +92,36 @@ class ECRImage:
                 return None
             raise
 
+    def tag_image(self, tag: str) -> None:
+        """Apply an additional tag to this image.
+
+        Fetches the image manifest via ``batch_get_image`` and re-publishes it
+        with the new tag via ``put_image``.  If the tag already points to the
+        same manifest, ``ImageAlreadyExistsException`` is caught silently.
+
+        :param tag: The tag to apply.
+        :raises ClientError: On AWS API errors (except ``ImageAlreadyExistsException``).
+        """
+        response = self._client.batch_get_image(
+            repositoryName=self._repository_name,
+            imageIds=[self.image_id],
+        )
+        manifest = response["images"][0]["imageManifest"]
+        try:
+            self._client.put_image(
+                repositoryName=self._repository_name,
+                imageManifest=manifest,
+                imageTag=tag,
+            )
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ImageAlreadyExistsException":
+                LOG.debug("Tag %s already exists for this image in %s", tag, self._repository_name)
+            else:
+                raise
+
     @property
-    def _image_id(self) -> dict:
-        """Return the ``imageIds`` element for this image.
+    def image_id(self) -> dict:
+        """Return the ``imageIds`` element for boto3 ECR API calls.
 
         :rtype: dict
         """
