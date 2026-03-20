@@ -74,9 +74,7 @@ def test_delete_empty_bucket():
     """delete() on an empty bucket deletes it directly."""
     bucket = S3Bucket(BUCKET_NAME, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.get_paginator.return_value = _mock_paginator(
-        [{"Versions": [], "DeleteMarkers": []}]
-    )
+    mock_client.get_paginator.return_value = _mock_paginator([{"Versions": [], "DeleteMarkers": []}])
 
     with mock.patch.object(S3Bucket, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         bucket.delete()
@@ -159,9 +157,7 @@ def test_delete_batches_large_pages():
 
     # Create a page with 2500 versions
     versions = [{"Key": f"obj-{i}", "VersionId": f"v{i}"} for i in range(2500)]
-    mock_client.get_paginator.return_value = _mock_paginator(
-        [{"Versions": versions, "DeleteMarkers": []}]
-    )
+    mock_client.get_paginator.return_value = _mock_paginator([{"Versions": versions, "DeleteMarkers": []}])
 
     with mock.patch.object(S3Bucket, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         bucket.delete()

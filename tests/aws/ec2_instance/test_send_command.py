@@ -25,9 +25,7 @@ def ec2_instance(monkeypatch):
     instance._ssm_client = MagicMock()
     # Mock ec2_client so state checks don't hit real AWS (default: pending).
     mock_ec2 = MagicMock()
-    mock_ec2.describe_instances.return_value = {
-        "Reservations": [{"Instances": [{"State": {"Name": "pending"}}]}]
-    }
+    mock_ec2.describe_instances.return_value = {"Reservations": [{"Instances": [{"State": {"Name": "pending"}}]}]}
     instance._ec2_client = mock_ec2
     return instance
 

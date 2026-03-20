@@ -44,9 +44,7 @@ def test_exists_pending():
     """exists returns True when the NAT Gateway is in 'pending' state."""
     gw = NATGateway(NAT_GW_ID, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_nat_gateways.return_value = {
-        "NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "pending"}]
-    }
+    mock_client.describe_nat_gateways.return_value = {"NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "pending"}]}
 
     with mock.patch.object(NATGateway, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert gw.exists is True
@@ -56,9 +54,7 @@ def test_exists_failed():
     """exists returns True when the NAT Gateway is in 'failed' state (it still exists)."""
     gw = NATGateway(NAT_GW_ID, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_nat_gateways.return_value = {
-        "NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "failed"}]
-    }
+    mock_client.describe_nat_gateways.return_value = {"NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "failed"}]}
 
     with mock.patch.object(NATGateway, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert gw.exists is True
@@ -68,9 +64,7 @@ def test_exists_deleting():
     """exists returns False when the NAT Gateway is in 'deleting' state."""
     gw = NATGateway(NAT_GW_ID, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_nat_gateways.return_value = {
-        "NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "deleting"}]
-    }
+    mock_client.describe_nat_gateways.return_value = {"NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "deleting"}]}
 
     with mock.patch.object(NATGateway, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert gw.exists is False
@@ -80,9 +74,7 @@ def test_exists_deleted():
     """exists returns False when the NAT Gateway is in 'deleted' state."""
     gw = NATGateway(NAT_GW_ID, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_nat_gateways.return_value = {
-        "NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "deleted"}]
-    }
+    mock_client.describe_nat_gateways.return_value = {"NatGateways": [{"NatGatewayId": NAT_GW_ID, "State": "deleted"}]}
 
     with mock.patch.object(NATGateway, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert gw.exists is False

@@ -44,7 +44,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "black ~=26.1",
+    "black ~= 26.3, >= 26.3.1",
     "build ~= 1.2",
     "bump2version ~= 1.0",
     "mdformat ~=1.0",

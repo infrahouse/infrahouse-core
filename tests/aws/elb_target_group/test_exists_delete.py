@@ -31,9 +31,7 @@ def test_exists_true():
     """exists returns True when the target group is found."""
     tg = ELBTargetGroup(TG_ARN, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_target_groups.return_value = {
-        "TargetGroups": [{"TargetGroupArn": TG_ARN}]
-    }
+    mock_client.describe_target_groups.return_value = {"TargetGroups": [{"TargetGroupArn": TG_ARN}]}
 
     with mock.patch.object(ELBTargetGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert tg.exists is True

@@ -31,9 +31,7 @@ def test_exists_true():
     """exists returns True when the Security Group is found."""
     sg = SecurityGroup(SG_ID, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.describe_security_groups.return_value = {
-        "SecurityGroups": [{"GroupId": SG_ID}]
-    }
+    mock_client.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": SG_ID}]}
 
     with mock.patch.object(SecurityGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert sg.exists is True

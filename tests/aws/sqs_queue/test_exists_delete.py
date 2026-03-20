@@ -61,9 +61,7 @@ def test_exists_aws_non_existent_queue():
     """exists returns False when AWS.SimpleQueueService.NonExistentQueue is raised."""
     queue = SQSQueue(QUEUE_URL, region="us-east-1")
     mock_client = mock.MagicMock()
-    mock_client.get_queue_attributes.side_effect = _make_client_error(
-        "AWS.SimpleQueueService.NonExistentQueue"
-    )
+    mock_client.get_queue_attributes.side_effect = _make_client_error("AWS.SimpleQueueService.NonExistentQueue")
 
     with mock.patch.object(SQSQueue, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
         assert queue.exists is False
