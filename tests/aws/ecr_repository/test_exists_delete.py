@@ -30,19 +30,19 @@ def test_ecr_image_rejects_both_tag_and_digest():
         ECRImage(mock.MagicMock(), REPO_NAME, tag="latest", digest="sha256:abc")
 
 
-# -- ECRImage._image_id ------------------------------------------------------
+# -- ECRImage.image_id -------------------------------------------------------
 
 
 def test_ecr_image_id_from_tag():
-    """_image_id returns imageTag dict when constructed with tag."""
+    """image_id returns imageTag dict when constructed with tag."""
     image = ECRImage(mock.MagicMock(), REPO_NAME, tag="latest")
-    assert image._image_id == {"imageTag": "latest"}
+    assert image.image_id == {"imageTag": "latest"}
 
 
 def test_ecr_image_id_from_digest():
-    """_image_id returns imageDigest dict when constructed with digest."""
+    """image_id returns imageDigest dict when constructed with digest."""
     image = ECRImage(mock.MagicMock(), REPO_NAME, digest="sha256:abc123")
-    assert image._image_id == {"imageDigest": "sha256:abc123"}
+    assert image.image_id == {"imageDigest": "sha256:abc123"}
 
 
 # -- ECRImage.exists ---------------------------------------------------------
@@ -128,6 +128,71 @@ def test_image_digest_not_found():
     mock_client.describe_images.side_effect = _make_client_error("ImageNotFoundException")
     image = ECRImage(mock_client, REPO_NAME, tag="nonexistent")
     assert image.digest is None
+
+
+# -- ECRImage.tag_image ------------------------------------------------------
+
+
+def test_tag_image_success():
+    """tag_image() fetches manifest and puts it with a new tag."""
+    mock_client = mock.MagicMock()
+    manifest = '{"schemaVersion": 2}'
+    mock_client.batch_get_image.return_value = {"images": [{"imageManifest": manifest}]}
+    image = ECRImage(mock_client, REPO_NAME, tag="latest")
+
+    image.tag_image("v1.0")
+
+    mock_client.batch_get_image.assert_called_once_with(
+        repositoryName=REPO_NAME,
+        imageIds=[{"imageTag": "latest"}],
+    )
+    mock_client.put_image.assert_called_once_with(
+        repositoryName=REPO_NAME,
+        imageManifest=manifest,
+        imageTag="v1.0",
+    )
+
+
+def test_tag_image_by_digest():
+    """tag_image() works when the image is identified by digest."""
+    mock_client = mock.MagicMock()
+    manifest = '{"schemaVersion": 2}'
+    mock_client.batch_get_image.return_value = {"images": [{"imageManifest": manifest}]}
+    image = ECRImage(mock_client, REPO_NAME, digest="sha256:abc123")
+
+    image.tag_image("deployed")
+
+    mock_client.batch_get_image.assert_called_once_with(
+        repositoryName=REPO_NAME,
+        imageIds=[{"imageDigest": "sha256:abc123"}],
+    )
+    mock_client.put_image.assert_called_once_with(
+        repositoryName=REPO_NAME,
+        imageManifest=manifest,
+        imageTag="deployed",
+    )
+
+
+def test_tag_image_already_exists():
+    """tag_image() silently handles ImageAlreadyExistsException."""
+    mock_client = mock.MagicMock()
+    mock_client.batch_get_image.return_value = {"images": [{"imageManifest": "{}"}]}
+    mock_client.put_image.side_effect = _make_client_error("ImageAlreadyExistsException")
+    image = ECRImage(mock_client, REPO_NAME, tag="latest")
+
+    image.tag_image("v1.0")  # Should not raise
+
+
+def test_tag_image_unexpected_error():
+    """tag_image() re-raises unexpected errors from put_image."""
+    mock_client = mock.MagicMock()
+    mock_client.batch_get_image.return_value = {"images": [{"imageManifest": "{}"}]}
+    mock_client.put_image.side_effect = _make_client_error("AccessDeniedException")
+    image = ECRImage(mock_client, REPO_NAME, tag="latest")
+
+    with pytest.raises(ClientError) as exc_info:
+        image.tag_image("v1.0")
+    assert exc_info.value.response["Error"]["Code"] == "AccessDeniedException"
 
 
 # -- ECRRepository.repository_name --------------------------------------------
