@@ -376,5 +376,5 @@ def _get_org_name(github_client: GithubIntegration, installation_id: int) -> str
         "Authorization": f"Bearer {github_client.create_jwt()}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    response = get(url, headers=headers, timeout=600)
+    response = get(url, headers=headers, timeout=30)
     return response.json()["account"]["login"]
