@@ -273,7 +273,7 @@ def get_credentials_from_profile() -> dict:
     return {var: profile_data.get(key) for var, key in VALUE_MAP.items()}
 
 
-def get_credentials_from_environ():
+def get_credentials_from_environ() -> dict:
     """Yet another way to get credentials.
 
     If environment is already configured for AWS access, simply get the credential from the environment.
@@ -293,7 +293,7 @@ def get_credentials_from_environ():
     }
 
 
-def get_secret(secretsmanager_client, secret_name):
+def get_secret(secretsmanager_client, secret_name: str) -> str:
     """
     Retrieve a value of a secret by its name.
     """
