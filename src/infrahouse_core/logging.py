@@ -4,6 +4,7 @@ InfraHouse Toolkit Logging.
 
 import logging
 import sys
+from typing import Optional
 
 
 class LessThanFilter(logging.Filter):  # pylint: disable=too-few-public-methods
@@ -18,7 +19,12 @@ class LessThanFilter(logging.Filter):  # pylint: disable=too-few-public-methods
         return 1 if record.levelno < self.max_level else 0
 
 
-def setup_logging(logger=None, debug=False, quiet=False, debug_botocore=False):  # pragma: no cover
+def setup_logging(  # pragma: no cover
+    logger: Optional[logging.Logger] = None,
+    debug: bool = False,
+    quiet: bool = False,
+    debug_botocore: bool = False,
+) -> None:
     """Configures logging for the module"""
     logger = logger or logging.getLogger()
     fmt_str = "%(asctime)s: %(levelname)s: %(name)s:%(module)s.%(funcName)s():%(lineno)d: %(message)s"
