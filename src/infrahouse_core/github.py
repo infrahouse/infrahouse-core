@@ -6,14 +6,12 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import List, Optional
 
-import boto3
-from botocore.exceptions import ClientError
 from cached_property import cached_property_with_ttl
 from github import GithubIntegration
 from github.Consts import MAX_JWT_EXPIRY
 from requests import HTTPError, delete, get, post
 
-from infrahouse_core.aws import get_secret
+from infrahouse_core.aws.secretsmanager import Secret
 
 LOG = getLogger(__name__)
 
@@ -167,16 +165,26 @@ class GitHubActions:
 
     :param github: GitHub authentication information (token and org).
     :type github: GitHubAuth
+    :param region: AWS region for Secrets Manager operations.
+    :type region: str
+    :param role_arn: IAM role ARN to assume for cross-account access.
+    :type role_arn: str
     """
 
-    def __init__(self, github: GitHubAuth):
+    def __init__(self, github: GitHubAuth, region: str = None, role_arn: str = None):
         """
         Initialize the GitHubActions manager.
 
         :param github: GitHub authentication object.
         :type github: GitHubAuth
+        :param region: AWS region for Secrets Manager operations.
+        :type region: str
+        :param role_arn: IAM role ARN to assume for cross-account access.
+        :type role_arn: str
         """
         self._github = github
+        self._region = region
+        self._role_arn = role_arn
 
     @property
     def registration_token(self) -> str:
@@ -291,57 +299,40 @@ class GitHubActions:
         Ensure a registration token secret is present in AWS Secrets Manager.
 
         This method checks if the specified secret exists. If it does not exist,
-        it creates the secret with the registration token. If an error other than
-        'ResourceNotFoundException' occurs during the check, it raises the exception.
+        it creates the secret with the registration token.
 
         :param registration_token_secret: The name of the secret to ensure presence.
         :type registration_token_secret: str
-        :raises ClientError: If an error occurs that is not a 'ResourceNotFoundException'.
+        :raises ClientError: If an unexpected AWS error occurs.
         """
-        secretsmanager_client = boto3.client("secretsmanager")
-        try:
-            secretsmanager_client.describe_secret(SecretId=registration_token_secret)
+        secret = Secret(registration_token_secret, region=self._region, role_arn=self._role_arn)
+        secret.ensure_present(
+            value=self.registration_token,
+            description="GitHub Actions runner registration token",
+        )
 
-        except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
-                secretsmanager_client.create_secret(
-                    Name=registration_token_secret,
-                    Description="GitHub Actions runner registration token",
-                    SecretString=self.registration_token,
-                )
-                LOG.info("Created secret %s", registration_token_secret)
-            else:
-                LOG.error("Error occurred while deleting secret: %s", err)
-                raise
-
-    @staticmethod
-    def _ensure_absent_secret(registration_token_secret):
+    def _ensure_absent_secret(self, registration_token_secret):
         """
         Ensure a registration token secret is absent in AWS Secrets Manager.
 
         This method checks if the specified secret exists. If it does exist,
-        it deletes the secret. If an error other than 'ResourceNotFoundException'
-        occurs during the check, it raises the exception.
+        it deletes the secret.
 
         :param registration_token_secret: The name of the secret to ensure absence.
         :type registration_token_secret: str
-        :raises ClientError: If an error occurs that is not a 'ResourceNotFoundException'.
+        :raises ClientError: If an unexpected AWS error occurs.
         """
-        secretsmanager_client = boto3.client("secretsmanager")
-        try:
-            secretsmanager_client.describe_secret(SecretId=registration_token_secret)
-            secretsmanager_client.delete_secret(SecretId=registration_token_secret)
-            LOG.info("Deleted secret %s", registration_token_secret)
-
-        except ClientError as err:
-            if err.response["Error"]["Code"] == "ResourceNotFoundException":
-                return
-
-            LOG.error("Error occurred while deleting secret: %s", err)
-            raise
+        secret = Secret(registration_token_secret, region=self._region, role_arn=self._role_arn)
+        secret.ensure_absent(force=True)
 
 
-def get_tmp_token(gh_app_id: int, pem_key_secret: str, github_org_name: str) -> str:
+def get_tmp_token(
+    gh_app_id: int,
+    pem_key_secret: str,
+    github_org_name: str,
+    region: str = None,
+    role_arn: str = None,
+) -> str:
     """
     Generate a temporary GitHub token from GitHUb App PEM key.
     The GitHub App must be created in your org, can be found in
@@ -352,13 +343,17 @@ def get_tmp_token(gh_app_id: int, pem_key_secret: str, github_org_name: str) -> 
     :param pem_key_secret: Secret ARN with the PEM key.
     :type pem_key_secret: str
     :param github_org_name: GitHub Organization. Used to find GitHub App installation.
+    :param region: AWS region for Secrets Manager operations.
+    :type region: str
+    :param role_arn: IAM role ARN to assume for cross-account access.
+    :type role_arn: str
     :return: GitHub token
     :rtype: str
     """
-    secretsmanager_client = boto3.client("secretsmanager")
+    secret = Secret(pem_key_secret, region=region, role_arn=role_arn)
     github_client = GithubIntegration(
         gh_app_id,
-        get_secret(secretsmanager_client, pem_key_secret),
+        secret.value,
         jwt_expiry=MAX_JWT_EXPIRY,
     )
     for installation in github_client.get_installations():
