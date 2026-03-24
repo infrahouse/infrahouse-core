@@ -1,5 +1,18 @@
 """
 AWS classes.
+
+AWS Region Resolution Order
+===========================
+
+When ``region=None`` is passed (or omitted):
+
+1. For ``EC2Instance``: Attempts to read from instance metadata (if running on EC2).
+2. For other classes: Relies on AWS SDK default resolution:
+
+   a. ``AWS_DEFAULT_REGION`` environment variable
+   b. ``AWS_REGION`` environment variable
+   c. ``~/.aws/config`` file ``[default]`` region
+   d. ``us-east-1`` (AWS SDK fallback)
 """
 
 import hashlib

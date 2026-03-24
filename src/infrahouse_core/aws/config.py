@@ -77,12 +77,30 @@ class AWSConfig:
             "us-west-2",
         ]
 
-    def get_account_id(self, profile_name):
-        """Read account id for given profile."""
+    def get_account_id(self, profile_name: str) -> str:
+        """
+        Read AWS account ID for given profile.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: AWS account ID (12-digit number).
+        :rtype: str
+        :raises NoSectionError: If profile doesn't exist in config.
+        :raises NoOptionError: If ``sso_account_id`` is not configured for profile.
+        """
         return self.config_parser.get(self._get_section(profile_name), "sso_account_id")
 
-    def get_region(self, profile_name):
-        """Read AWS region for given profile."""
+    def get_region(self, profile_name: str) -> str:
+        """
+        Read AWS region for given profile.
+
+        Falls back to the ``[default]`` section if the profile or region option is not found.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: AWS region name, or ``None`` if not configured anywhere.
+        :rtype: str or None
+        """
         try:
             return self.config_parser.get(self._get_section(profile_name), "region")
         except NoSectionError:
@@ -91,8 +109,18 @@ class AWSConfig:
         except NoOptionError:
             return self.config_parser.get("default", "region") if "default" in self.config_parser.sections() else None
 
-    def get_sso_region(self, profile_name):
-        """For a given profile, find SSO region"""
+    def get_sso_region(self, profile_name: str) -> str:
+        """
+        Read SSO region for given profile.
+
+        Looks up the ``sso_session`` for the profile, then reads ``sso_region``
+        from that session's config section. Falls back to the ``[default]`` region.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: SSO region name, or ``None`` if not configured anywhere.
+        :rtype: str or None
+        """
         try:
             sso_session = self.config_parser.get(self._get_section(profile_name), "sso_session")
         except NoOptionError:
@@ -106,12 +134,33 @@ class AWSConfig:
         except NoOptionError:
             return self.config_parser.get("default", "region")
 
-    def get_role(self, profile_name):
-        """Read AWS IAM role for given profile."""
+    def get_role(self, profile_name: str) -> str:
+        """
+        Read AWS IAM role name for given profile.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: SSO role name.
+        :rtype: str
+        :raises NoSectionError: If profile doesn't exist in config.
+        :raises NoOptionError: If ``sso_role_name`` is not configured for profile.
+        """
         return self.config_parser.get(self._get_section(profile_name), "sso_role_name")
 
-    def get_start_url(self, profile_name):
-        """Read SSO URL for given profile."""
+    def get_start_url(self, profile_name: str) -> str:
+        """
+        Read SSO start URL for given profile.
+
+        Looks up the ``sso_session`` for the profile, then reads ``sso_start_url``
+        from that session's config section.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: SSO start URL.
+        :rtype: str
+        :raises NoSectionError: If profile or SSO session section doesn't exist.
+        :raises NoOptionError: If ``sso_session`` or ``sso_start_url`` is not configured.
+        """
         sso_session = self.config_parser.get(self._get_section(profile_name), "sso_session")
         return self.config_parser.get(f"sso-session {sso_session}", "sso_start_url")
 

@@ -109,6 +109,13 @@ class DynamoDBTable:
         :param key_name: The partition key name in the DynamoDB table (default: "ResourceId").
         :raises RuntimeError: If the lock cannot be acquired within the timeout.
         :raises ClientError: If an unexpected error occurs while trying to acquire the lock.
+
+        Example::
+
+            table = DynamoDBTable("my-locks-table", region="us-east-1")
+            with table.lock("deploy-my-service", timeout=60, ttl=600):
+                # Only one process can hold this lock at a time.
+                run_deployment()
         """
         start = time()
         while True:
