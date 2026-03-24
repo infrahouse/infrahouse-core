@@ -24,7 +24,13 @@ class GitHubAuth:
     This class holds the necessary credentials to authenticate with the GitHub API.
     It is used by other classes in this module to make authenticated API calls.
 
-    :param token: GitHub Personal Access Token or GitHub App token for authentication
+    .. warning::
+        Tokens should be stored securely (e.g., AWS Secrets Manager).
+        Never log or print the token value.
+        Rotate tokens regularly following your organization's security policy.
+
+    :param token: GitHub Personal Access Token or GitHub App token for authentication.
+        Retrieve from secure storage, never hardcode.
     :type token: str
     :param org: GitHub organization name where the runners are registered
     :type org: str
@@ -169,6 +175,25 @@ class GitHubActions:
     :type region: str
     :param role_arn: IAM role ARN to assume for cross-account access.
     :type role_arn: str
+
+    Example::
+
+        auth = GitHubAuth(token="ghp_...", org="my-org")
+        gha = GitHubActions(auth, region="us-east-1")
+
+        # Store a registration token in Secrets Manager
+        gha.ensure_registration_token("my-runner-token")
+
+        # List runners and find one by label
+        for runner in gha.runners:
+            print(runner.name, runner.status)
+
+        runner = gha.find_runner_by_label("instance_id:i-abc123")
+        if runner:
+            gha.deregister_runner(runner)
+
+        # Clean up the token
+        gha.ensure_registration_token("my-runner-token", present=False)
     """
 
     def __init__(self, github: GitHubAuth, region: str = None, role_arn: str = None):

@@ -285,7 +285,14 @@ class EC2Instance:
         :type send_timeout: int
         :param execution_timeout: Time in seconds to wait for the command to complete.
         :type execution_timeout: int
-        :return: A tuple containing the command ID, standard output, and standard error.
+        :return: A tuple containing the exit code, standard output, and standard error.
+
+        Example::
+
+            instance = EC2Instance("i-1234567890abcdef0", region="us-east-1")
+            exit_code, stdout, stderr = instance.execute_command("hostname")
+            if exit_code != 0:
+                raise RuntimeError(f"Command failed: {stderr}")
         """
         command_id = self._send_command(command, send_timeout)
         return self._wait_for_command(command_id, execution_timeout)

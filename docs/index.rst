@@ -8,6 +8,8 @@ Welcome to InfraHouse Core's documentation!
    readme
    installation
    usage
+   architecture
+   migration
    modules
    contributing
    authors

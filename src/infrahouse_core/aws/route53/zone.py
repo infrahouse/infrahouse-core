@@ -133,6 +133,21 @@ class Zone:
         Add A record.
         If the hostname record already exists in the zone, the ip_address will be added.
         Otherwise, a new record is created.
+
+        :param hostname: Hostname without the domain part (e.g. ``"www"`` not ``"www.example.com"``).
+        :type hostname: str
+        :param ip_address: IP address to add to the record.
+        :type ip_address: str
+        :param ttl: Time-to-live in seconds (default 300).
+        :type ttl: int
+
+        Example::
+
+            zone = Zone(zone_name="example.com", region="us-east-1")
+            # Creates a new A record www.example.com -> 1.2.3.4
+            zone.add_record("www", "1.2.3.4")
+            # Adds a second IP to the same record
+            zone.add_record("www", "5.6.7.8")
         """
         try:
             ip_list = self.search_hostname(hostname)

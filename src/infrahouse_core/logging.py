@@ -25,7 +25,21 @@ def setup_logging(  # pragma: no cover
     quiet: bool = False,
     debug_botocore: bool = False,
 ) -> None:
-    """Configures logging for the module"""
+    """
+    Configure logging for the module.
+
+    Sets up stdout/stderr handlers with level-based routing. The logger is
+    configured in place and nothing is returned.
+
+    :param logger: Logger to configure. If ``None``, uses the root logger.
+    :type logger: logging.Logger or None
+    :param debug: Enable debug logging.
+    :type debug: bool
+    :param quiet: Suppress INFO logs.
+    :type quiet: bool
+    :param debug_botocore: If True, keep botocore at debug level instead of suppressing it.
+    :type debug_botocore: bool
+    """
     logger = logger or logging.getLogger()
     fmt_str = "%(asctime)s: %(levelname)s: %(name)s:%(module)s.%(funcName)s():%(lineno)d: %(message)s"
 
