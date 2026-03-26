@@ -44,6 +44,14 @@ infrahouse\_core.aws.asg\_instance module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.cloudwatch\_alarm module
+---------------------------------------------
+
+.. automodule:: infrahouse_core.aws.cloudwatch_alarm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.cloudfront\_cache\_policy module
 -----------------------------------------------------
 
@@ -84,6 +92,30 @@ infrahouse\_core.aws.cloudwatch\_log\_group module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.ecr\_repository module
+-------------------------------------------
+
+.. automodule:: infrahouse_core.aws.ecr_repository
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.ecs\_service module
+----------------------------------------
+
+.. automodule:: infrahouse_core.aws.ecs_service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.ecs\_task\_definition module
+-------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.ecs_task_definition
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.config module
 ----------------------------------
 
@@ -96,6 +128,30 @@ infrahouse\_core.aws.dynamodb module
 ------------------------------------
 
 .. automodule:: infrahouse_core.aws.dynamodb
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.elastic\_ip module
+---------------------------------------
+
+.. automodule:: infrahouse_core.aws.elastic_ip
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.elasticache\_cluster module
+------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.elasticache_cluster
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.emr\_serverless\_application module
+--------------------------------------------------------
+
+.. automodule:: infrahouse_core.aws.emr_serverless_application
    :members:
    :undoc-members:
    :show-inheritance:
@@ -140,10 +196,34 @@ infrahouse\_core.aws.exceptions module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.internet\_gateway module
+---------------------------------------------
+
+.. automodule:: infrahouse_core.aws.internet_gateway
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.kms\_key module
+------------------------------------
+
+.. automodule:: infrahouse_core.aws.kms_key
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.nat\_gateway module
 ----------------------------------------
 
 .. automodule:: infrahouse_core.aws.nat_gateway
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.opensearch\_domain module
+----------------------------------------------
+
+.. automodule:: infrahouse_core.aws.opensearch_domain
    :members:
    :undoc-members:
    :show-inheritance:
@@ -196,6 +276,30 @@ infrahouse\_core.aws.lambda\_function module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.rds\_cluster module
+----------------------------------------
+
+.. automodule:: infrahouse_core.aws.rds_cluster
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.rds\_instance module
+-----------------------------------------
+
+.. automodule:: infrahouse_core.aws.rds_instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.route\_table module
+----------------------------------------
+
+.. automodule:: infrahouse_core.aws.route_table
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.s3\_bucket module
 --------------------------------------
 
@@ -224,6 +328,38 @@ infrahouse\_core.aws.sqs\_queue module
 --------------------------------------
 
 .. automodule:: infrahouse_core.aws.sqs_queue
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.subnet module
+----------------------------------
+
+.. automodule:: infrahouse_core.aws.subnet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.vpc module
+-------------------------------
+
+.. automodule:: infrahouse_core.aws.vpc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.vpc\_endpoint module
+-----------------------------------------
+
+.. automodule:: infrahouse_core.aws.vpc_endpoint
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.vpc\_flow\_log module
+------------------------------------------
+
+.. automodule:: infrahouse_core.aws.vpc_flow_log
    :members:
    :undoc-members:
    :show-inheritance:
