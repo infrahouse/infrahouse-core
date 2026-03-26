@@ -445,28 +445,44 @@ from infrahouse_core.aws.cloudfront_function import CloudFrontFunction  # noqa: 
 from infrahouse_core.aws.cloudfront_response_headers_policy import (  # noqa: E402
     CloudFrontResponseHeadersPolicy,
 )
+from infrahouse_core.aws.cloudwatch_alarm import CloudWatchAlarm  # noqa: E402
 from infrahouse_core.aws.cloudwatch_log_group import CloudWatchLogGroup  # noqa: E402
 from infrahouse_core.aws.dynamodb import DynamoDBTable  # noqa: E402
 from infrahouse_core.aws.ec2_instance import EC2Instance  # noqa: E402
 from infrahouse_core.aws.ecr_repository import ECRImage, ECRRepository  # noqa: E402
 from infrahouse_core.aws.ecs_service import ECSService  # noqa: E402
 from infrahouse_core.aws.ecs_task_definition import ECSTaskDefinition  # noqa: E402
+from infrahouse_core.aws.elastic_ip import ElasticIP  # noqa: E402
+from infrahouse_core.aws.elasticache_cluster import ElastiCacheCluster  # noqa: E402
 from infrahouse_core.aws.elb_load_balancer import ELBLoadBalancer  # noqa: E402
 from infrahouse_core.aws.elb_target_group import ELBTargetGroup  # noqa: E402
+from infrahouse_core.aws.emr_serverless_application import (  # noqa: E402
+    EMRServerlessApplication,
+)
 from infrahouse_core.aws.eventbridge_rule import EventBridgeRule  # noqa: E402
 from infrahouse_core.aws.iam_group import IAMGroup  # noqa: E402
 from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile  # noqa: E402
 from infrahouse_core.aws.iam_policy import IAMPolicy  # noqa: E402
 from infrahouse_core.aws.iam_role import IAMRole  # noqa: E402
 from infrahouse_core.aws.iam_user import IAMUser  # noqa: E402
+from infrahouse_core.aws.internet_gateway import InternetGateway  # noqa: E402
+from infrahouse_core.aws.kms_key import KMSKey  # noqa: E402
 from infrahouse_core.aws.lambda_function import LambdaFunction  # noqa: E402
 from infrahouse_core.aws.nat_gateway import NATGateway  # noqa: E402
+from infrahouse_core.aws.opensearch_domain import OpenSearchDomain  # noqa: E402
+from infrahouse_core.aws.rds_cluster import RDSCluster  # noqa: E402
+from infrahouse_core.aws.rds_instance import RDSInstance  # noqa: E402
 from infrahouse_core.aws.route53.zone import Zone  # noqa: E402
+from infrahouse_core.aws.route_table import RouteTable  # noqa: E402
 from infrahouse_core.aws.s3_bucket import S3Bucket  # noqa: E402
 from infrahouse_core.aws.secretsmanager import Secret  # noqa: E402
 from infrahouse_core.aws.security_group import SecurityGroup  # noqa: E402
 from infrahouse_core.aws.sns_topic import SNSTopic  # noqa: E402
 from infrahouse_core.aws.sqs_queue import SQSQueue  # noqa: E402
+from infrahouse_core.aws.subnet import Subnet  # noqa: E402
+from infrahouse_core.aws.vpc import VPC  # noqa: E402
+from infrahouse_core.aws.vpc_endpoint import VPCEndpoint  # noqa: E402
+from infrahouse_core.aws.vpc_flow_log import VPCFlowLog  # noqa: E402
 
 __all__ = [
     "ACMCertificate",
@@ -477,6 +493,7 @@ __all__ = [
     "CloudFrontDistribution",
     "CloudFrontFunction",
     "CloudFrontResponseHeadersPolicy",
+    "CloudWatchAlarm",
     "CloudWatchLogGroup",
     "DynamoDBTable",
     "EC2Instance",
@@ -484,20 +501,33 @@ __all__ = [
     "ECRRepository",
     "ECSService",
     "ECSTaskDefinition",
+    "ElasticIP",
+    "ElastiCacheCluster",
     "ELBLoadBalancer",
     "ELBTargetGroup",
+    "EMRServerlessApplication",
     "EventBridgeRule",
     "IAMGroup",
     "IAMInstanceProfile",
     "IAMPolicy",
     "IAMRole",
     "IAMUser",
+    "InternetGateway",
+    "KMSKey",
     "LambdaFunction",
     "NATGateway",
+    "OpenSearchDomain",
+    "RDSCluster",
+    "RDSInstance",
+    "RouteTable",
     "S3Bucket",
     "Secret",
     "SecurityGroup",
     "SNSTopic",
     "SQSQueue",
+    "Subnet",
+    "VPC",
+    "VPCEndpoint",
+    "VPCFlowLog",
     "Zone",
 ]
