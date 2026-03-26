@@ -120,3 +120,94 @@ def test_delete_unexpected_error():
         with pytest.raises(ClientError) as exc_info:
             lg.delete()
         assert exc_info.value.response["Error"]["Code"] == "AccessDeniedException"
+
+
+# -- retention_in_days --------------------------------------------------------
+
+
+def test_retention_in_days():
+    """retention_in_days returns the value from describe_log_groups."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    mock_client.get_paginator.return_value = _mock_paginator(
+        [{"logGroups": [{"logGroupName": LOG_GROUP_NAME, "retentionInDays": 365}]}]
+    )
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        assert lg.retention_in_days == 365
+
+
+def test_retention_in_days_never_expire():
+    """retention_in_days returns None when retentionInDays is absent (never expire)."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    mock_client.get_paginator.return_value = _mock_paginator([{"logGroups": [{"logGroupName": LOG_GROUP_NAME}]}])
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        assert lg.retention_in_days is None
+
+
+def test_retention_in_days_not_found():
+    """retention_in_days raises ValueError when the log group does not exist."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    mock_client.get_paginator.return_value = _mock_paginator([{"logGroups": []}])
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        with pytest.raises(ValueError, match="not found"):
+            _ = lg.retention_in_days
+
+
+# -- set_retention ------------------------------------------------------------
+
+
+def test_set_retention():
+    """set_retention calls put_retention_policy with correct args."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        lg.set_retention(365)
+    mock_client.put_retention_policy.assert_called_once_with(logGroupName=LOG_GROUP_NAME, retentionInDays=365)
+
+
+# -- list_log_groups ----------------------------------------------------------
+
+
+def test_list_log_groups():
+    """list_log_groups returns CloudWatchLogGroup instances for all groups."""
+    mock_client = mock.MagicMock()
+    mock_client.get_paginator.return_value = _mock_paginator(
+        [
+            {
+                "logGroups": [
+                    {"logGroupName": "/aws/lambda/func-a"},
+                    {"logGroupName": "/aws/lambda/func-b"},
+                ]
+            }
+        ]
+    )
+    with mock.patch("infrahouse_core.aws.cloudwatch_log_group.get_client", return_value=mock_client):
+        groups = CloudWatchLogGroup.list_log_groups(region="us-east-1")
+    assert len(groups) == 2
+    assert all(isinstance(g, CloudWatchLogGroup) for g in groups)
+    assert groups[0].log_group_name == "/aws/lambda/func-a"
+    assert groups[1].log_group_name == "/aws/lambda/func-b"
+
+
+def test_list_log_groups_with_prefix():
+    """list_log_groups passes logGroupNamePrefix when prefix is given."""
+    mock_client = mock.MagicMock()
+    mock_paginator = mock.MagicMock()
+    mock_paginator.paginate.return_value = [{"logGroups": []}]
+    mock_client.get_paginator.return_value = mock_paginator
+    with mock.patch("infrahouse_core.aws.cloudwatch_log_group.get_client", return_value=mock_client):
+        CloudWatchLogGroup.list_log_groups(prefix="/aws/lambda/", region="us-east-1")
+    mock_paginator.paginate.assert_called_once_with(logGroupNamePrefix="/aws/lambda/")
+
+
+def test_list_log_groups_no_prefix():
+    """list_log_groups does not pass logGroupNamePrefix when prefix is None."""
+    mock_client = mock.MagicMock()
+    mock_paginator = mock.MagicMock()
+    mock_paginator.paginate.return_value = [{"logGroups": []}]
+    mock_client.get_paginator.return_value = mock_paginator
+    with mock.patch("infrahouse_core.aws.cloudwatch_log_group.get_client", return_value=mock_client):
+        CloudWatchLogGroup.list_log_groups(region="us-east-1")
+    mock_paginator.paginate.assert_called_once_with()
