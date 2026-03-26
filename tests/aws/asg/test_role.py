@@ -1,7 +1,21 @@
 from unittest import mock
 
+import pytest
+
 from infrahouse_core.aws.asg import ASG
 from infrahouse_core.aws.asg_instance import ASGInstance
+
+
+def test_asg_instance_positional_instance_id():
+    """ASGInstance accepts instance_id as a positional argument (issue #120)."""
+    instance = ASGInstance("i-1234567890abcdef0", region="us-east-1")
+    assert instance.instance_id == "i-1234567890abcdef0"
+
+
+def test_asg_instance_keyword_instance_id():
+    """ASGInstance accepts instance_id as a keyword argument."""
+    instance = ASGInstance(instance_id="i-1234567890abcdef0", region="us-east-1")
+    assert instance.instance_id == "i-1234567890abcdef0"
 
 
 def test_instances():

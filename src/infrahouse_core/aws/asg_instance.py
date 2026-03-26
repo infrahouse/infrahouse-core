@@ -19,8 +19,8 @@ class ASGInstance(EC2Instance):
     Because it's an EC2 instance, ASGInstance inherits EC2Instance.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, instance_id=None, **kwargs):
+        super().__init__(instance_id=instance_id, **kwargs)
         self._autoscaling_client_instance = None
 
     @property
