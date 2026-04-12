@@ -54,8 +54,10 @@ def gha_instance(runner_1, runner_2, runner_3):
         yield GitHubActions(mock.MagicMock())
 
 
-def test_find_runners_by_label_empty(gha_instance):
-    # When there are no runners, the method should yield nothing.
+def test_find_runners_by_label_no_match(gha_instance):
+    # When no runner carries the requested label, the method yields nothing.
+    # (For the real empty-org path — GitHub API returning {"runners": []} —
+    # see test_get_github_runners_empty_org in test_runners_memory.py.)
     result = list(gha_instance.find_runners_by_label("any"))
     assert result == []
 

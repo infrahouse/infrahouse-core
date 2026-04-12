@@ -244,16 +244,34 @@ class GitHubActions:
         the iterator advances. Keeps memory usage bounded to one page when
         running in memory-constrained environments (e.g. Lambda).
 
+        Each access to this property returns a **new independent generator**.
+        Iterating it consumes the generator; a second ``for r in gha.runners``
+        loop will replay the GitHub API calls from scratch. If you need to
+        iterate the same set of runners more than once, wrap the first access
+        with ``list()`` to materialize the results::
+
+            snapshot = list(gha.runners)
+            busy = [r for r in snapshot if r.busy]
+            idle = [r for r in snapshot if not r.busy]
+
         :return: An iterator of GitHubActionsRunner objects.
         :rtype: Iterator[GitHubActionsRunner]
         """
-        for r in self._get_github_runners():
-            yield GitHubActionsRunner(r["id"], self._github, runner_data=r)
+        yield from (GitHubActionsRunner(r["id"], self._github, runner_data=r) for r in self._get_github_runners())
 
     def deregister_runner(self, runner: GitHubActionsRunner):
         """
-        De-register a runner from the GitHub organization.
+        De-register a self-hosted runner from the GitHub organization.
 
+        Issues ``DELETE /orgs/{org}/actions/runners/{runner_id}`` and raises
+        if GitHub returns a non-2xx response. The caller is responsible for
+        stopping the runner process and terminating its host; this method
+        only removes GitHub's record of the runner.
+
+        :param runner: The runner to de-register.
+        :type runner: GitHubActionsRunner
+        :raises requests.HTTPError: If the GitHub API returns a non-2xx status
+            (for example, 404 if the runner was already removed).
         """
         response = delete(
             f"https://api.github.com/orgs/{self._github.org}/actions/runners/{runner.runner_id}",
@@ -304,9 +322,7 @@ class GitHubActions:
         :return: An iterator of GitHubActionsRunner objects that match the label.
         :rtype: Iterator[GitHubActionsRunner]
         """
-        for runner in self.runners:
-            if label in runner.labels:
-                yield runner
+        yield from (runner for runner in self.runners if label in runner.labels)
 
     @property
     def _github_headers(self) -> dict:
@@ -327,13 +343,20 @@ class GitHubActions:
 
         :return: An iterator of runner metadata dictionaries.
         :rtype: Iterator[dict]
+        :raises ValueError: If a paginated response is missing the ``runners`` key.
         """
         url = f"https://api.github.com/orgs/{self._github.org}/actions/runners"
         while url:
             response = get(url, headers=self._github_headers, timeout=10)
             response.raise_for_status()
             data = response.json()
-            yield from data["runners"]
+            runners_page = data.get("runners")
+            if runners_page is None:
+                raise ValueError(
+                    f"Unexpected GitHub API response from {url} — 'runners' key missing. "
+                    f"Keys present: {list(data.keys())}"
+                )
+            yield from runners_page
             url = response.links.get("next", {}).get("url")
 
     def _ensure_present_secret(self, registration_token_secret):

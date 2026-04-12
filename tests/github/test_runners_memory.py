@@ -9,6 +9,7 @@ instead of materializing every page before returning.
 from unittest import mock
 
 import pytest
+from requests import HTTPError
 
 from infrahouse_core.github import GitHubActions, GitHubAuth
 
@@ -54,6 +55,8 @@ def paginated_get():
 
     def side_effect(url, headers=None, timeout=None):
         state["fetched"] += 1
+        if url not in page_urls:
+            pytest.fail(f"Unexpected URL requested by _get_github_runners: {url!r}")
         idx = page_urls.index(url)
         next_url = page_urls[idx + 1] if idx + 1 < len(pages) else None
         return _make_response(pages[idx], next_url)
@@ -92,6 +95,21 @@ def test_find_runners_by_label_is_lazy(paginated_get):
     assert state["fetched"] == 1
 
 
+def test_runners_yields_all_across_all_pages(paginated_get):
+    """
+    Direct end-to-end correctness anchor for the ``runners`` property: all
+    7 runner IDs across all 5 pages must be yielded exactly once, in order,
+    and all 5 pages must be fetched.
+    """
+    state, pages = paginated_get
+    gha = GitHubActions(GitHubAuth("test-token", ORG))
+
+    runner_ids = [r.runner_id for r in gha.runners]
+
+    assert runner_ids == [1, 2, 3, 4, 5, 6, 7]
+    assert state["fetched"] == len(pages)
+
+
 def test_find_runners_by_label_yields_all_matches(paginated_get):
     """
     Correctness guard: a full consumption must yield every matching runner
@@ -104,3 +122,61 @@ def test_find_runners_by_label_yields_all_matches(paginated_get):
 
     assert [r.runner_id for r in matches] == [1, 4]
     assert state["fetched"] == len(pages)
+
+
+def test_get_github_runners_raises_on_missing_runners_key():
+    """
+    If the GitHub API returns a response without the ``runners`` key,
+    ``_get_github_runners`` must fail fast with a ValueError that names
+    the keys that *were* present, rather than bubbling up a KeyError
+    from somewhere deep in the iteration.
+    """
+    bogus = mock.Mock()
+    bogus.json.return_value = {"total_count": 0}  # no "runners" key
+    bogus.links = {}
+    bogus.raise_for_status.return_value = None
+
+    with mock.patch("infrahouse_core.github.get", return_value=bogus):
+        gha = GitHubActions(GitHubAuth("test-token", ORG))
+        with pytest.raises(ValueError, match="'runners' key missing"):
+            list(gha.runners)
+
+
+def test_http_error_on_second_page_raises():
+    """
+    Page 1 succeeds and its runners are yielded to the caller. Page 2 then
+    returns a 5xx — the generator must propagate the HTTPError on the next
+    advance instead of swallowing it or silently truncating the iteration.
+    """
+    page1 = _make_response([_runner(1, ["alpha"])], next_url="https://api.github.com/p1")
+    page2 = mock.Mock()
+    page2.raise_for_status.side_effect = HTTPError("503 Service Unavailable")
+
+    responses = iter([page1, page2])
+
+    with mock.patch("infrahouse_core.github.get", side_effect=lambda *a, **kw: next(responses)):
+        gha = GitHubActions(GitHubAuth("test-token", ORG))
+        gen = iter(gha.runners)
+
+        first = next(gen)
+        assert first.runner_id == 1
+
+        with pytest.raises(HTTPError):
+            next(gen)
+
+
+def test_get_github_runners_empty_org():
+    """
+    An org with zero runners returns ``{"runners": []}`` and must yield
+    nothing without raising. Guards against regressing the empty-org path.
+    """
+    empty = mock.Mock()
+    empty.json.return_value = {"runners": []}
+    empty.links = {}
+    empty.raise_for_status.return_value = None
+
+    with mock.patch("infrahouse_core.github.get", return_value=empty):
+        gha = GitHubActions(GitHubAuth("test-token", ORG))
+        assert list(gha.runners) == []
+        assert gha.find_runner_by_label("anything") is None
+        assert list(gha.find_runners_by_label("anything")) == []
