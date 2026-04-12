@@ -129,6 +129,13 @@ Typical lazy usage::
             continue
         gha.deregister_runner(runner)
 
+Deregistering while iterating is safe: ``deregister_runner`` issues an
+independent ``DELETE /orgs/{org}/actions/runners/{id}`` request and does not
+mutate the paginated list response that the iterator is currently reading
+from. Contrast this with iterating a local list and mutating it in place,
+which Python forbids — the GitHub pagination cursor lives server-side and
+is advanced only when the iterator asks for the next page.
+
 
 Caching Behaviour
 =================
