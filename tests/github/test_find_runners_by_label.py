@@ -55,12 +55,12 @@ def gha_instance(runner_1, runner_2, runner_3):
 
 
 def test_find_runners_by_label_empty(gha_instance):
-    # When there are no runners, the method should return an empty list.
-    result = gha_instance.find_runners_by_label("any")
+    # When there are no runners, the method should yield nothing.
+    result = list(gha_instance.find_runners_by_label("any"))
     assert result == []
 
 
 def test_find_runners_by_label_found(gha_instance):
-    # Should return only those runners that include the "alpha" label.
-    result = gha_instance.find_runners_by_label("alpha")
+    # Should yield only those runners that include the "alpha" label.
+    result = list(gha_instance.find_runners_by_label("alpha"))
     assert len(result) == 2

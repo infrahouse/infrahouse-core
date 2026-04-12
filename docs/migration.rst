@@ -105,6 +105,51 @@ All resource classes accept ``role_arn`` for cross-account operations::
     instance = EC2Instance("i-abc123", role_arn="arn:aws:iam::123456789012:role/Admin")
 
 
+Breaking Changes
+================
+
+GitHubActions: ``runners`` / ``find_runners_by_label`` are now iterators
+------------------------------------------------------------------------
+
+**Changed in:** v1.0.0
+
+``GitHubActions.runners`` and ``GitHubActions.find_runners_by_label()`` now
+return ``Iterator[GitHubActionsRunner]`` instead of ``List[GitHubActionsRunner]``.
+Pages are fetched from the GitHub API lazily as the iterator advances, keeping
+memory usage bounded to a single API page. This fixes OOM crashes in 128 MB
+AWS Lambda functions running against large organizations.
+
+Code that iterated over the results keeps working unchanged::
+
+    for runner in gha.runners:
+        ...
+
+    for runner in gha.find_runners_by_label("instance_id:i-abc123"):
+        ...
+
+Code that relied on list semantics must wrap with ``list()``:
+
+Before::
+
+    all_runners = gha.runners
+    count = len(all_runners)
+    first = all_runners[0]
+
+    matches = gha.find_runners_by_label("alpha")
+    if matches == []:
+        ...
+
+After::
+
+    all_runners = list(gha.runners)
+    count = len(all_runners)
+    first = all_runners[0]
+
+    matches = list(gha.find_runners_by_label("alpha"))
+    if not matches:
+        ...
+
+
 Deprecated Parameters
 =====================
 

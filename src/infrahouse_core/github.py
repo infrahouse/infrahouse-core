@@ -4,7 +4,7 @@ GitHub Actions
 
 from dataclasses import dataclass
 from logging import getLogger
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 from cached_property import cached_property_with_ttl
 from github import GithubIntegration
@@ -184,7 +184,7 @@ class GitHubActions:
         # Store a registration token in Secrets Manager
         gha.ensure_registration_token("my-runner-token")
 
-        # List runners and find one by label
+        # Iterate over runners (lazy — one API page at a time)
         for runner in gha.runners:
             print(runner.name, runner.status)
 
@@ -194,6 +194,14 @@ class GitHubActions:
 
         # Clean up the token
         gha.ensure_registration_token("my-runner-token", present=False)
+
+    .. note::
+        ``runners`` and ``find_runners_by_label()`` return iterators, not lists.
+        They fetch subsequent GitHub API pages only as the iterator advances, so
+        memory usage stays bounded to one page (~100 runners) regardless of
+        organization size. This is important in memory-constrained environments
+        such as 128 MB AWS Lambda functions. Callers that need a materialized
+        collection should wrap the result with ``list()``.
     """
 
     def __init__(self, github: GitHubAuth, region: str = None, role_arn: str = None):
@@ -228,14 +236,19 @@ class GitHubActions:
         return response.json()["token"]
 
     @property
-    def runners(self) -> List[GitHubActionsRunner]:
+    def runners(self) -> Iterator[GitHubActionsRunner]:
         """
-        Retrieve a list of all self-hosted runners for the organization.
+        Iterate over all self-hosted runners for the organization.
 
-        :return: A list of GitHubActionsRunner objects.
-        :rtype: list[GitHubActionsRunner]
+        Yields runners one at a time, fetching subsequent API pages only as
+        the iterator advances. Keeps memory usage bounded to one page when
+        running in memory-constrained environments (e.g. Lambda).
+
+        :return: An iterator of GitHubActionsRunner objects.
+        :rtype: Iterator[GitHubActionsRunner]
         """
-        return [GitHubActionsRunner(r["id"], self._github, runner_data=r) for r in self._get_github_runners()]
+        for r in self._get_github_runners():
+            yield GitHubActionsRunner(r["id"], self._github, runner_data=r)
 
     def deregister_runner(self, runner: GitHubActionsRunner):
         """
@@ -278,21 +291,22 @@ class GitHubActions:
         """
         return next((runner for runner in self.runners if label in runner.labels), None)
 
-    def find_runners_by_label(self, label: str) -> List[GitHubActionsRunner]:
+    def find_runners_by_label(self, label: str) -> Iterator[GitHubActionsRunner]:
         """
-        Find all runners that have the specified label.
+        Yield all runners that have the specified label.
 
-        This method iterates over all available runners and collects
-        those that contain the specified label in their list of labels.
+        Iterates lazily over the organization's runners, fetching subsequent
+        API pages only as the caller advances the iterator. Callers that need
+        a materialized collection should wrap the result with ``list()``.
 
         :param label: The label to search for.
         :type label: str
-        :return: A list of GitHubActionsRunner objects that match the label,
-                 or an empty list if none are found.
-        :rtype: List[GitHubActionsRunner]
+        :return: An iterator of GitHubActionsRunner objects that match the label.
+        :rtype: Iterator[GitHubActionsRunner]
         """
-        # Filter runners by checking if the label is present in each runner's labels
-        return [runner for runner in self.runners if label in runner.labels]
+        for runner in self.runners:
+            if label in runner.labels:
+                yield runner
 
     @property
     def _github_headers(self) -> dict:
@@ -302,22 +316,25 @@ class GitHubActions:
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    def _get_github_runners(self) -> List[dict]:
+    def _get_github_runners(self) -> Iterator[dict]:
         """
-        Internal method to retrieve raw runner data from the GitHub API.
+        Yield raw runner metadata from the GitHub API one page at a time.
 
-        :return: A list of runner metadata dictionaries.
-        :rtype: list[dict]
+        Only one page of runner dicts is held in memory at a time. This keeps
+        ``runners`` and ``find_runners_by_label`` O(page_size) rather than
+        O(total_runners), which matters in constrained environments such as
+        128 MB Lambda functions.
+
+        :return: An iterator of runner metadata dictionaries.
+        :rtype: Iterator[dict]
         """
-        runners = []
         url = f"https://api.github.com/orgs/{self._github.org}/actions/runners"
         while url:
             response = get(url, headers=self._github_headers, timeout=10)
             response.raise_for_status()
             data = response.json()
-            runners.extend(data["runners"])
+            yield from data["runners"]
             url = response.links.get("next", {}).get("url")
-        return runners
 
     def _ensure_present_secret(self, registration_token_secret):
         """

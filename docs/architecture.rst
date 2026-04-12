@@ -102,6 +102,34 @@ first API call is made::
 for CloudTrail auditing.  You can override this with the ``session_name`` parameter.
 
 
+GitHub Runner Iteration
+=======================
+
+``GitHubActions.runners`` and ``GitHubActions.find_runners_by_label()`` return
+**iterators**, not lists. They stream pages from the GitHub API lazily and yield
+one ``GitHubActionsRunner`` at a time, so memory usage stays bounded to a
+single page (~100 runners) regardless of organization size.
+
+This matters in memory-constrained environments — for example, a 128 MB AWS
+Lambda function running against a large organization would previously OOM
+because ``runners`` materialized the entire list before returning. With the
+iterator contract, ``find_runner_by_label()`` also short-circuits: once a match
+is found on the current page, subsequent pages are never fetched.
+
+Callers that need a materialized collection should wrap the result with
+``list()``::
+
+    all_runners = list(gha.runners)
+    alphas = list(gha.find_runners_by_label("alpha"))
+
+Typical lazy usage::
+
+    for runner in gha.runners:
+        if runner.busy:
+            continue
+        gha.deregister_runner(runner)
+
+
 Caching Behaviour
 =================
 
