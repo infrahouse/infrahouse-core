@@ -69,3 +69,82 @@ class AWSResource(ABC):
     @abstractmethod
     def delete(self) -> None:
         """Delete the resource."""
+
+    # -- Tag helpers ---------------------------------------------------------
+    #
+    # The default implementations use the AWS-wide generic tagging API
+    # (``list_tags_for_resource`` / ``tag_resource`` / ``untag_resource``),
+    # which covers CloudWatch Logs, RDS, Lambda, KMS, Secrets Manager, SNS,
+    # SQS, Step Functions, and many other services.  Subclasses whose
+    # service uses a different tag API (EC2 ``create_tags``, S3
+    # ``put_bucket_tagging``, IAM ``tag_role``, etc.) should override these
+    # methods.  All subclasses that want tag support must implement
+    # :attr:`arn`.
+
+    @property
+    def arn(self) -> str:
+        """Return the ARN of this resource.
+
+        Subclasses must override this to enable the generic tag helpers.
+
+        :raises NotImplementedError: if the subclass has not implemented ``arn``.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not implement arn")
+
+    @property
+    def tags(self) -> dict:
+        """Return current tags as a ``{key: value}`` dict.
+
+        Uses the generic ``list_tags_for_resource`` API.  Override in
+        subclasses whose service uses a different tagging API.
+        """
+        response = self._client.list_tags_for_resource(resourceArn=self.arn)
+        return response.get("tags", {})
+
+    def set_tag(self, key: str, value: str) -> bool:
+        """Set a single tag on this resource.
+
+        Idempotent: if the tag is already set to ``value``, no API call is
+        made.
+
+        :param key: Tag key.
+        :param value: Tag value.
+        :returns: ``True`` if the tag was written, ``False`` if it was
+            already current.
+        """
+        if self.tags.get(key) == value:
+            return False
+        self._client.tag_resource(resourceArn=self.arn, tags={key: value})
+        LOG.info("Set tag %s=%s on %s", key, value, self.arn)
+        return True
+
+    def set_tags(self, tags: dict) -> int:
+        """Set multiple tags on this resource.
+
+        Idempotent: tags that already have the requested value are skipped.
+
+        :param tags: Mapping of tag keys to values.
+        :returns: Number of tags actually written.
+        """
+        current = self.tags
+        to_write = {k: v for k, v in tags.items() if current.get(k) != v}
+        if not to_write:
+            return 0
+        self._client.tag_resource(resourceArn=self.arn, tags=to_write)
+        LOG.info("Set %d tag(s) on %s", len(to_write), self.arn)
+        return len(to_write)
+
+    def remove_tag(self, key: str) -> bool:
+        """Remove a single tag from this resource.
+
+        Idempotent: no-op if the tag is not currently set.
+
+        :param key: Tag key to remove.
+        :returns: ``True`` if the tag was present and removed, ``False``
+            if it was already absent.
+        """
+        if key not in self.tags:
+            return False
+        self._client.untag_resource(resourceArn=self.arn, tagKeys=[key])
+        LOG.info("Removed tag %s from %s", key, self.arn)
+        return True

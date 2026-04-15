@@ -51,6 +51,28 @@ class CloudWatchLogGroup(AWSResource):
         return False
 
     @property
+    def arn(self) -> str:
+        """Return the ARN of the log group.
+
+        Pulled from ``describe_log_groups`` so no account/region plumbing
+        is required at construction time.  The CloudWatch Logs API
+        returns ARNs with a trailing ``:*`` wildcard; this property
+        strips it so the value can be used with ``tag_resource`` and
+        similar APIs that expect a plain resource ARN.
+
+        :raises ValueError: if the log group does not exist.
+        """
+        paginator = self._client.get_paginator("describe_log_groups")
+        for page in paginator.paginate(logGroupNamePrefix=self._resource_id):
+            for group in page.get("logGroups", []):
+                if group["logGroupName"] == self._resource_id:
+                    arn = group["arn"]
+                    if arn.endswith(":*"):
+                        arn = arn[:-2]
+                    return arn
+        raise ValueError(f"Log group {self._resource_id} not found")
+
+    @property
     def retention_in_days(self) -> int | None:
         """Return the retention period in days, or ``None`` if set to never expire."""
         paginator = self._client.get_paginator("describe_log_groups")

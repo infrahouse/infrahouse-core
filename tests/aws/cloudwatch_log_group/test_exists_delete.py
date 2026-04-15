@@ -122,6 +122,43 @@ def test_delete_unexpected_error():
         assert exc_info.value.response["Error"]["Code"] == "AccessDeniedException"
 
 
+# -- arn ----------------------------------------------------------------------
+
+
+def test_arn_strips_trailing_wildcard():
+    """arn returns the log group ARN with the trailing :* stripped."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    api_arn = f"arn:aws:logs:us-east-1:123456789012:log-group:{LOG_GROUP_NAME}:*"
+    mock_client.get_paginator.return_value = _mock_paginator(
+        [{"logGroups": [{"logGroupName": LOG_GROUP_NAME, "arn": api_arn}]}]
+    )
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        assert lg.arn == f"arn:aws:logs:us-east-1:123456789012:log-group:{LOG_GROUP_NAME}"
+
+
+def test_arn_without_wildcard():
+    """arn returns the ARN unchanged when the API already omits :*."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    api_arn = f"arn:aws:logs:us-east-1:123456789012:log-group:{LOG_GROUP_NAME}"
+    mock_client.get_paginator.return_value = _mock_paginator(
+        [{"logGroups": [{"logGroupName": LOG_GROUP_NAME, "arn": api_arn}]}]
+    )
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        assert lg.arn == api_arn
+
+
+def test_arn_not_found():
+    """arn raises ValueError when the log group does not exist."""
+    lg = CloudWatchLogGroup(LOG_GROUP_NAME, region="us-east-1")
+    mock_client = mock.MagicMock()
+    mock_client.get_paginator.return_value = _mock_paginator([{"logGroups": []}])
+    with mock.patch.object(CloudWatchLogGroup, "_client", new_callable=mock.PropertyMock, return_value=mock_client):
+        with pytest.raises(ValueError, match="not found"):
+            _ = lg.arn
+
+
 # -- retention_in_days --------------------------------------------------------
 
 
