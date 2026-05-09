@@ -112,3 +112,51 @@ class S3Bucket(AWSResource):
 
         if total_deleted:
             LOG.info("Deleted %d object versions from bucket %s", total_deleted, self._resource_id)
+
+    # -- Tag helpers (S3-specific) ----------------------------------------------
+
+    @property
+    def tags(self) -> dict:
+        """Return current tags as a ``{key: value}`` dict."""
+        try:
+            response = self._client.get_bucket_tagging(Bucket=self._resource_id)
+            return {t["Key"]: t["Value"] for t in response.get("TagSet", [])}
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "NoSuchTagSet":
+                return {}
+            raise
+
+    def set_tag(self, key: str, value: str) -> bool:
+        current = self.tags
+        if current.get(key) == value:
+            return False
+        current[key] = value
+        self._put_tags(current)
+        LOG.info("Set tag %s=%s on bucket %s", key, value, self._resource_id)
+        return True
+
+    def set_tags(self, tags: dict) -> int:
+        current = self.tags
+        to_write = {k: v for k, v in tags.items() if current.get(k) != v}
+        if not to_write:
+            return 0
+        current.update(to_write)
+        self._put_tags(current)
+        LOG.info("Set %d tag(s) on bucket %s", len(to_write), self._resource_id)
+        return len(to_write)
+
+    def remove_tag(self, key: str) -> bool:
+        current = self.tags
+        if key not in current:
+            return False
+        del current[key]
+        if current:
+            self._put_tags(current)
+        else:
+            self._client.delete_bucket_tagging(Bucket=self._resource_id)
+        LOG.info("Removed tag %s from bucket %s", key, self._resource_id)
+        return True
+
+    def _put_tags(self, tags: dict) -> None:
+        tag_set = [{"Key": k, "Value": v} for k, v in tags.items()]
+        self._client.put_bucket_tagging(Bucket=self._resource_id, Tagging={"TagSet": tag_set})
