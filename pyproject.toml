@@ -37,6 +37,14 @@ license = {text = "Apache Software License 2.0"}
 dependencies = [
     "boto3 ~= 1.36",
     "cached-property ~= 2.0",
+    # cryptography is a transitive dependency (PyGithub -> pyjwt[crypto]). This
+    # is a deliberate security-motivated exception to the "pin to major with ~="
+    # standard: wheels < 48.0.1 statically link a vulnerable OpenSSL
+    # (GHSA-537c-gmf6-5ccf, High, CVSS 7.5), and cryptography bumps its major
+    # version frequently (48 -> 49 already released), so a "~= 48.0" pin would
+    # immediately go stale and cap consumers below the current secure release.
+    # Use a floor only so every consumer inherits the fix without an upper cap.
+    "cryptography >= 48.0.1",
     "diskcache ~= 5.6",
     "ec2-metadata ~= 2.13",
     "PyGithub ~= 2.4",
