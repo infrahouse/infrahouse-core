@@ -13,6 +13,22 @@ class IHAWSException(IHCoreException):
     """AWS related InfraHouse exception"""
 
 
+class IHBootstrapException(IHAWSException):
+    """Instance bootstrap related InfraHouse exception"""
+
+
+class IHBootstrapFailed(IHBootstrapException):
+    """The instance finished bootstrapping unsuccessfully"""
+
+
+class IHBootstrapTimeout(IHBootstrapException):
+    """The instance didn't finish bootstrapping in the allotted time"""
+
+
+class IHBootstrapUnknown(IHBootstrapException):
+    """The instance bootstrap state can not be determined"""
+
+
 class IHDynamoDBException(IHAWSException):
     """DynamoDB related InfraHouse exception"""
 
