@@ -49,6 +49,28 @@ class ASG:
         ]
 
     @property
+    def tags(self) -> dict:
+        """
+        :return: A dictionary with the autoscaling group tags. Keys are tag names,
+            and values - the tag values.
+        """
+        # Tags are returned as a list of dictionaries, where each dictionary has 'Key' and 'Value' keys.
+        # We want to expose them as a dictionary, where the key is the tag name and the value - the tag value.
+        return {tag["Key"]: tag["Value"] for tag in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Tags"]}
+
+    @property
+    def launch_tags(self) -> dict:
+        """
+        :return: Same as :attr:`tags`, but only the tags the group propagates
+            to instances at launch.
+        """
+        return {
+            tag["Key"]: tag["Value"]
+            for tag in self._describe_auto_scaling_groups["AutoScalingGroups"][0]["Tags"]
+            if tag["PropagateAtLaunch"]
+        }
+
+    @property
     def exists(self) -> bool:
         """
         Check whether the autoscaling group currently exists.
