@@ -2,10 +2,11 @@
 Module for EC2Instance class - a class tha represents an EC2 instance.
 """
 
+import re
 import warnings
 from enum import Enum
 from logging import getLogger
-from time import sleep
+from time import monotonic, sleep
 from typing import Optional
 
 from boto3 import Session
@@ -15,6 +16,11 @@ from cached_property import cached_property_with_ttl
 from ec2_metadata import ec2_metadata
 
 from infrahouse_core.aws import get_client
+from infrahouse_core.aws.exceptions import (
+    IHBootstrapFailed,
+    IHBootstrapTimeout,
+    IHBootstrapUnknown,
+)
 from infrahouse_core.timeout import timeout
 from infrahouse_core.validation import (
     validate_instance_id,
@@ -23,6 +29,18 @@ from infrahouse_core.validation import (
 )
 
 LOG = getLogger(__name__)
+
+# `cloud-init status` reports the state of the instance's own provisioning,
+# whatever that provisioning is - an ih-bootstrap/Puppet instance, an ECS
+# container instance, or a stock AMI. See EC2Instance.wait_for_bootstrap().
+CLOUD_INIT_STATUS_COMMAND = "cloud-init status"
+
+# Evidence to collect when bootstrap fails or times out. The instance is
+# usually torn down right after, so this is the only chance to learn why.
+CLOUD_INIT_DIAGNOSTIC_COMMANDS = (
+    "cloud-init status --long",
+    "tail -n 100 /var/log/cloud-init-output.log",
+)
 
 
 class CommandStatus(Enum):
@@ -115,6 +133,31 @@ class EC2Instance:
             This is obtained from EC2 metadata.
         """
         return ec2_metadata.availability_zone
+
+    @property
+    def cloud_init_status(self) -> str:
+        """
+        Provisioning state of the instance as reported by cloud-init itself.
+
+        Known values are ``not run``, ``running``, ``done``, ``error`` and
+        ``disabled``. Newer cloud-init versions also report ``degraded done``
+        and ``degraded running``.
+
+        :return: The cloud-init status, lowercased.
+        :raise IHBootstrapUnknown: when the status can not be read from the
+            instance, e.g. cloud-init is not installed on it.
+        """
+        exit_code, stdout, stderr = self.execute_command(CLOUD_INIT_STATUS_COMMAND)
+        # `cloud-init status` exits non-zero when the status is `error` (1) or
+        # `degraded done` (2), so a non-zero exit code is a state, not a failure.
+        # Only an unparsable output means we could not learn the state.
+        match = re.search(r"^status:\s*(\S.*?)\s*$", stdout, re.MULTILINE)
+        if match is None:
+            raise IHBootstrapUnknown(
+                f"Could not parse `{CLOUD_INIT_STATUS_COMMAND}` output on {self.instance_id}. "
+                f"Exit code: {exit_code}, STDOUT: {stdout!r}, STDERR: {stderr!r}"
+            )
+        return match.group(1).lower()
 
     @property
     def ec2_client(self) -> BaseClient:
@@ -297,6 +340,67 @@ class EC2Instance:
         command_id = self._send_command(command, send_timeout)
         return self._wait_for_command(command_id, execution_timeout)
 
+    def wait_for_bootstrap(self, timeout_seconds: int = 600, poll_interval: int = 10) -> None:
+        """
+        Block until the instance finishes provisioning itself.
+
+        The check is what cloud-init says about its own run, so it does not
+        depend on **how** the instance is provisioned. On an instance built by
+        terraform-aws-cloud-init, cloud-init reports ``done`` only after
+        ih-bootstrap - and therefore ``ih-puppet apply`` - succeeded, because
+        the bootstrap script runs from ``runcmd`` under ``set -euo pipefail``.
+        An ECS container instance, or any other AMI, is covered by the same
+        check without a special case.
+
+        Note that cloud-init runs on every boot, so the answer is about the
+        current boot.
+
+        :param timeout_seconds: How long to wait for cloud-init to finish.
+        :type timeout_seconds: int
+        :param poll_interval: How long to wait between two status checks.
+        :type poll_interval: int
+        :raise IHBootstrapFailed: when cloud-init finishes with an error.
+        :raise IHBootstrapTimeout: when cloud-init is still running after
+            ``timeout_seconds`` seconds.
+        :raise IHBootstrapUnknown: when the cloud-init status can not be read.
+
+        The ``IHBootstrapFailed`` and ``IHBootstrapTimeout`` messages carry
+        ``cloud-init status --long`` and a tail of
+        ``/var/log/cloud-init-output.log`` collected from the instance.
+        """
+        # A deadline rather than the timeout() context manager on purpose:
+        # timeout() is SIGALRM based and execute_command() uses it internally,
+        # so the inner alarm would cancel the outer one and the wait would
+        # never expire.
+        deadline = monotonic() + timeout_seconds
+        while True:
+            status = self.cloud_init_status
+            # `degraded done` is a completed run with a recoverable error,
+            # `degraded running` is still in progress.
+            if status.endswith("done"):
+                if status != "done":
+                    LOG.warning("cloud-init on %s finished as '%s'.", self.instance_id, status)
+                LOG.info("Instance %s finished bootstrapping.", self.instance_id)
+                return
+
+            if status.endswith("error"):
+                raise IHBootstrapFailed(
+                    f"cloud-init on {self.instance_id} finished as '{status}'.\n{self._bootstrap_diagnostics()}"
+                )
+
+            if status == "disabled":
+                LOG.warning("cloud-init is disabled on %s. There is nothing to wait for.", self.instance_id)
+                return
+
+            if monotonic() >= deadline:
+                raise IHBootstrapTimeout(
+                    f"cloud-init on {self.instance_id} is still '{status}' after {timeout_seconds} seconds.\n"
+                    f"{self._bootstrap_diagnostics()}"
+                )
+
+            LOG.info("cloud-init on %s is '%s'. Waiting %d seconds.", self.instance_id, status, poll_interval)
+            sleep(poll_interval)
+
     @cached_property_with_ttl(ttl=10)
     def _describe_instance(self):
         """
@@ -314,6 +418,33 @@ class EC2Instance:
         ][0][
             "Instances"
         ][0]
+
+    def _bootstrap_diagnostics(self, send_timeout: int = 30, execution_timeout: int = 30) -> str:
+        """
+        Collect cloud-init evidence from the instance.
+
+        Best effort by design: this runs on a path that is already failing,
+        often because SSM can not reach the instance at all. A command that
+        fails here must not replace the failure it is meant to explain, and
+        the short timeouts keep it from waiting as long as the caller just did.
+
+        :param send_timeout: Time in seconds to attempt to send a command.
+        :type send_timeout: int
+        :param execution_timeout: Time in seconds to wait for a command to complete.
+        :type execution_timeout: int
+        :return: The collected output, ready to be embedded in an exception message.
+        """
+        report = []
+        for command in CLOUD_INIT_DIAGNOSTIC_COMMANDS:
+            try:
+                _, stdout, stderr = self.execute_command(
+                    command, send_timeout=send_timeout, execution_timeout=execution_timeout
+                )
+                report.append(f"$ {command}\n{stdout}{stderr}")
+            except (ClientError, RuntimeError, TimeoutError) as err:
+                LOG.warning("Could not collect `%s` from %s: %s", command, self.instance_id, err)
+                report.append(f"$ {command}\n<unavailable: {err}>")
+        return "\n".join(report)
 
     def _send_command(self, command: str, send_timeout: int = 600) -> str:
         """
