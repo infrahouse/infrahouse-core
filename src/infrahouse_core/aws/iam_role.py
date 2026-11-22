@@ -181,3 +181,51 @@ class IAMRole(AWSResource):
             LOG.info("Removing role %s from %d instance profiles", self._resource_id, len(profiles))
         for profile in profiles:
             profile.remove_role()
+
+    # -- Tag helpers (IAM role-specific) -------------------------------------
+    #
+    # IAM has no ``list_tags_for_resource``.  Roles use ``list_role_tags`` /
+    # ``tag_role`` / ``untag_role``, keyed by role name.
+
+    @property
+    def arn(self) -> str:
+        """Return the ARN of the role, from ``get_role``.
+
+        :raises ClientError: ``NoSuchEntity`` if the role does not exist.
+        """
+        return self._client.get_role(RoleName=self._resource_id)["Role"]["Arn"]
+
+    @property
+    def tags(self) -> dict:
+        """Return current tags as a ``{key: value}`` dict, read from every page of ``list_role_tags``.
+
+        :raises ClientError: ``NoSuchEntity`` if the role does not exist.
+        """
+        pages = self._client.get_paginator("list_role_tags").paginate(RoleName=self._resource_id)
+        return {tag["Key"]: tag["Value"] for page in pages for tag in page["Tags"]}
+
+    def set_tag(self, key: str, value: str) -> bool:
+        """Set one tag with ``tag_role``.  Same contract as :meth:`AWSResource.set_tag`."""
+        if self.tags.get(key) == value:
+            return False
+        self._client.tag_role(RoleName=self._resource_id, Tags=[{"Key": key, "Value": value}])
+        LOG.info("Set tag %s=%s on IAM role %s", key, value, self._resource_id)
+        return True
+
+    def set_tags(self, tags: dict) -> int:
+        """Set the changed tags with one ``tag_role`` call.  Same contract as :meth:`AWSResource.set_tags`."""
+        current = self.tags
+        to_write = {k: v for k, v in tags.items() if current.get(k) != v}
+        if not to_write:
+            return 0
+        self._client.tag_role(RoleName=self._resource_id, Tags=[{"Key": k, "Value": v} for k, v in to_write.items()])
+        LOG.info("Set %d tag(s) on IAM role %s", len(to_write), self._resource_id)
+        return len(to_write)
+
+    def remove_tag(self, key: str) -> bool:
+        """Remove one tag with ``untag_role``.  Same contract as :meth:`AWSResource.remove_tag`."""
+        if key not in self.tags:
+            return False
+        self._client.untag_role(RoleName=self._resource_id, TagKeys=[key])
+        LOG.info("Removed tag %s from IAM role %s", key, self._resource_id)
+        return True
