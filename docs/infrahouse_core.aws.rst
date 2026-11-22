@@ -124,6 +124,14 @@ infrahouse\_core.aws.config module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.credentials\_cache module
+----------------------------------------------
+
+.. automodule:: infrahouse_core.aws.credentials_cache
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.dynamodb module
 ------------------------------------
 
