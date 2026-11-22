@@ -13,8 +13,11 @@ import boto3
 import pytest
 from botocore.exceptions import ClientError
 
+from infrahouse_core.aws.iam_policy import IAMPolicy
 from infrahouse_core.aws.iam_role import IAMRole
 from infrahouse_core.aws.iam_user import IAMUser
+
+POLICY_ARN = "arn:aws:iam::123456789012:policy/my-policy"
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,7 @@ class IAMTagSpec:
 SPECS = [
     IAMTagSpec(IAMRole, "my-role", "RoleName", "list_role_tags", "tag_role", "untag_role", "get_role", "Role"),
     IAMTagSpec(IAMUser, "my-user", "UserName", "list_user_tags", "tag_user", "untag_user", "get_user", "User"),
+    IAMTagSpec(IAMPolicy, POLICY_ARN, "PolicyArn", "list_policy_tags", "tag_policy", "untag_policy", None, None),
 ]
 SPECS_WITH_GET = [spec for spec in SPECS if spec.get_op]
 
@@ -142,6 +146,16 @@ def test_arn_no_such_entity_propagates(spec):
             _ = _resource(spec).arn
 
     assert exc_info.value.response["Error"]["Code"] == "NoSuchEntity"
+
+
+def test_policy_arn_is_resource_id():
+    """IAMPolicy is constructed from its ARN, so ``arn`` makes no API call."""
+    client = mock.MagicMock()
+
+    with mock.patch.object(IAMPolicy, "_client", new_callable=mock.PropertyMock, return_value=client):
+        assert IAMPolicy(POLICY_ARN).arn == POLICY_ARN
+
+    assert not client.mock_calls
 
 
 # -- tags --------------------------------------------------------------------------
