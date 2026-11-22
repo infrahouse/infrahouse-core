@@ -72,9 +72,6 @@ class CommandStatus(Enum):
 class EC2Instance:
     """
     EC2Instance represents an EC2 instance.
-
-    :param instance_id: Instance id. If omitted, the local instance is read from metadata.
-    :type instance_id: str
     """
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
