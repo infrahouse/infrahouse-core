@@ -10,3 +10,11 @@ init-import=yes
 
 [SIMILARITIES]
 min-similarity-lines=10
+
+[MESSAGES CONTROL]
+# pylint 4.1 (what CI installs; 3.3 didn't) reports abstract-method (W0223) on every AWSResource
+# subclass that doesn't override arn, because AWSResource.arn raises NotImplementedError. That is on
+# purpose: overriding arn is optional, needed only by the generic tag helpers.
+# Members a subclass must implement are marked @abstractmethod, which Python enforces when the class
+# is instantiated.
+disable=abstract-method
