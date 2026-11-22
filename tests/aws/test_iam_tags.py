@@ -14,6 +14,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from infrahouse_core.aws.iam_role import IAMRole
+from infrahouse_core.aws.iam_user import IAMUser
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class IAMTagSpec:
 
 SPECS = [
     IAMTagSpec(IAMRole, "my-role", "RoleName", "list_role_tags", "tag_role", "untag_role", "get_role", "Role"),
+    IAMTagSpec(IAMUser, "my-user", "UserName", "list_user_tags", "tag_user", "untag_user", "get_user", "User"),
 ]
 SPECS_WITH_GET = [spec for spec in SPECS if spec.get_op]
 
