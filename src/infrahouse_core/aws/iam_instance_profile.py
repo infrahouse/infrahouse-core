@@ -130,7 +130,15 @@ class IAMInstanceProfile(AWSResource):
         return {tag["Key"]: tag["Value"] for page in pages for tag in page["Tags"]}
 
     def set_tag(self, key: str, value: str) -> bool:
-        """Set one tag with ``tag_instance_profile``.  Same contract as :meth:`AWSResource.set_tag`."""
+        """Set a single tag on the instance profile with ``tag_instance_profile``.
+
+        Idempotent: if the tag is already set to ``value``, no API call is made.
+
+        :param key: Tag key.
+        :param value: Tag value.
+        :returns: ``True`` if the tag was written, ``False`` if it was already current.
+        :raises ClientError: ``NoSuchEntity`` if the instance profile does not exist.
+        """
         if self.tags.get(key) == value:
             return False
         self._client.tag_instance_profile(InstanceProfileName=self._resource_id, Tags=[{"Key": key, "Value": value}])
@@ -138,9 +146,13 @@ class IAMInstanceProfile(AWSResource):
         return True
 
     def set_tags(self, tags: dict) -> int:
-        """Set the changed tags with one ``tag_instance_profile`` call.
+        """Set multiple tags on the instance profile with one ``tag_instance_profile`` call.
 
-        Same contract as :meth:`AWSResource.set_tags`.
+        Idempotent: only tags whose value differs are written.  If none differ, no API call is made.
+
+        :param tags: Mapping of tag keys to values.
+        :returns: Number of tags actually written.
+        :raises ClientError: ``NoSuchEntity`` if the instance profile does not exist.
         """
         current = self.tags
         to_write = {k: v for k, v in tags.items() if current.get(k) != v}
@@ -154,7 +166,14 @@ class IAMInstanceProfile(AWSResource):
         return len(to_write)
 
     def remove_tag(self, key: str) -> bool:
-        """Remove one tag with ``untag_instance_profile``.  Same contract as :meth:`AWSResource.remove_tag`."""
+        """Remove a single tag from the instance profile with ``untag_instance_profile``.
+
+        Idempotent: if the tag is not set, no API call is made.
+
+        :param key: Tag key to remove.
+        :returns: ``True`` if the tag was present and removed, ``False`` if it was already absent.
+        :raises ClientError: ``NoSuchEntity`` if the instance profile does not exist.
+        """
         if key not in self.tags:
             return False
         self._client.untag_instance_profile(InstanceProfileName=self._resource_id, TagKeys=[key])
