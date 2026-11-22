@@ -192,6 +192,17 @@ def _other_profile(cache_dir):
     _write_record(cache_dir, key="prod")
 
 
+def _expiry_too_big_for_a_float(cache_dir):
+    # Valid JSON, but float() of a 401-digit int overflows.
+    _write_record(cache_dir, expires_at=10**400)
+
+
+def _deeply_nested(cache_dir):
+    # Deeper than the recursion limit, so the JSON parser raises RecursionError.
+    _login_once_with(cache_dir, "dev")
+    _overwrite(cache_dir, b"[" * 200_000)
+
+
 STALE_CACHES = {
     "expired": _expired,
     "near-expiry": _near_expiry,
@@ -202,6 +213,8 @@ STALE_CACHES = {
     "wrong-shape": _wrong_shape,
     "missing-secret": _missing_secret,
     "other-profile": _other_profile,
+    "expiry-too-big-for-a-float": _expiry_too_big_for_a_float,
+    "deeply-nested": _deeply_nested,
 }
 
 

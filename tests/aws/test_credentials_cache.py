@@ -3,12 +3,14 @@
 import json
 import logging
 import os
+import random
 import stat
 import time
 from unittest import mock
 
 import pytest
 
+from infrahouse_core.aws import credentials_cache
 from infrahouse_core.aws.credentials_cache import CredentialsCache
 
 NAMESPACE = "test-credentials"
@@ -148,17 +150,129 @@ BROKEN_FILES = {
     "expired": lambda: json.dumps(_record(expires_at=time.time() - 60)).encode(),
     "no-data": lambda: json.dumps(_without("data")).encode(),
     "data-not-object": lambda: json.dumps(_record(data=["token"])).encode(),
+    # JSON numbers have no size limit; this one loads as an int too large for a float.
+    "expiry-too-big-for-a-float": lambda: json.dumps(_record(expires_at=10**400)).encode(),
+    "expiry-too-small-for-a-float": lambda: json.dumps(_record(expires_at=-(10**400))).encode(),
+    # Nesting deeper than the recursion limit makes the parser raise RecursionError.
+    "deeply-nested-arrays": lambda: b"[" * 200_000,
+    "deeply-nested-balanced": lambda: b"[" * 100_000 + b"]" * 100_000,
+    "deeply-nested-objects": lambda: b'{"a":' * 100_000 + b"1" + b"}" * 100_000,
+    "deeply-nested-field": lambda: _record_text(expires_at="[" * 100_000 + "]" * 100_000),
 }
 
 
+def _record_text(**fields: str) -> bytes:
+    """A record written by hand, so a field can hold JSON that json.dumps would never produce."""
+    values = {"version": "1", "key": '"dev"', "expires_at": repr(time.time() + 3600), "data": '{"token": "t"}'}
+    values.update(fields)
+    return ("{" + ", ".join(f'"{name}": {value}' for name, value in values.items()) + "}").encode()
+
+
+def _write(cache, content: bytes) -> None:
+    os.makedirs(os.path.dirname(cache.path("dev")), mode=0o700, exist_ok=True)
+    with open(cache.path("dev"), "wb") as cache_file:
+        cache_file.write(content)
+
+
 @pytest.mark.parametrize("content", BROKEN_FILES.values(), ids=BROKEN_FILES.keys())
-def test_load_treats_a_broken_file_as_a_miss(cache, cache_dir, content):
+def test_load_treats_a_broken_file_as_a_miss(cache, content):
     """Unparsable, wrongly shaped and expired files are all misses, not errors."""
-    cache_dir.mkdir(mode=0o700)
-    with open(cache.path("dev"), "wb") as broken:
-        broken.write(content())
+    _write(cache, content())
 
     assert cache.load("dev") is None
+
+
+# JSON values chosen to break a parser or a shape check: wrong types, numbers that don't fit a float or a
+# finite float, odd strings, and nesting both under and over the recursion limit.
+HOSTILE_VALUES = [
+    "null",
+    "true",
+    "false",
+    "0",
+    "-1",
+    "2",
+    "0.5",
+    "-0.0",
+    "1" + "0" * 400,
+    "-1" + "0" * 400,
+    "1" + "0" * 5000,
+    "1e308",
+    "-1e308",
+    "1e400",
+    "-1e400",
+    "NaN",
+    "Infinity",
+    "-Infinity",
+    '""',
+    '"dev"',
+    '"\\ud800"',
+    '"\\u0000"',
+    '"' + "x" * 100_000 + '"',
+    "[]",
+    "{}",
+    '["dev"]',
+    '{"token": 1}',
+    '{"token": "t"}',
+    "[" * 500 + "]" * 500,
+    '{"a":' * 500 + "1" + "}" * 500,
+    "[" * 100_000 + "]" * 100_000,
+    '{"a":' * 100_000 + "1" + "}" * 100_000,
+]
+
+
+@pytest.mark.parametrize("field", ["version", "key", "expires_at", "data"])
+def test_no_value_in_any_field_makes_load_raise(cache, field):
+    """Whatever JSON a field holds, load() returns the record or None; it never raises."""
+    for value in HOSTILE_VALUES:
+        _write(cache, _record_text(**{field: value}))
+
+        assert cache.load("dev", required_keys=("token",)) in (None, {"token": "t"}), value[:40]
+
+
+@pytest.mark.parametrize("value", HOSTILE_VALUES, ids=[f"value-{index}" for index in range(len(HOSTILE_VALUES))])
+def test_a_bare_json_value_is_a_miss(cache, value):
+    """A file holding just one JSON value, rather than a record, is a miss."""
+    _write(cache, value.encode())
+
+    assert cache.load("dev") is None
+
+
+def test_randomly_corrupted_files_never_make_load_raise(cache):
+    """Flip, insert and delete bytes of a valid file, with a fixed seed: every result loads or misses."""
+    valid = json.dumps(_record(expires_at=time.time() + 3600)).encode()
+    rng = random.Random(154)
+    for _ in range(2000):
+        content = bytearray(valid)
+        for _ in range(rng.randint(1, 8)):
+            position = rng.randrange(len(content) + 1)
+            action = rng.choice(("flip", "insert", "delete"))
+            if action == "flip" and position < len(content):
+                content[position] = rng.randrange(256)
+            elif action == "insert":
+                content[position:position] = rng.choice((b"[", b"{", b"9" * 400, b"\xff", b"e999", b'"', b","))
+            elif position < len(content):
+                del content[position]
+        _write(cache, bytes(content))
+
+        assert cache.load("dev") in (None, {"token": "t"}), bytes(content)
+
+
+def test_load_treats_an_oversized_file_as_a_miss(cache):
+    """A file larger than MAX_RECORD_BYTES isn't parsed at all, even if it is a valid record."""
+    padding = b" " * credentials_cache.MAX_RECORD_BYTES
+    _write(cache, padding + json.dumps(_record()).encode())
+
+    assert cache.load("dev") is None
+
+
+def test_save_refuses_a_record_load_would_reject_as_oversized(cache):
+    """save() doesn't write a file that load() would always treat as a miss."""
+    cache.save("dev", {"token": "old"}, expires_at=time.time() + 3600)
+
+    with pytest.raises(ValueError):
+        cache.save("dev", {"token": "x" * credentials_cache.MAX_RECORD_BYTES}, expires_at=time.time() + 3600)
+
+    assert cache.load("dev") == {"token": "old"}
 
 
 def test_load_checks_required_keys(cache):
