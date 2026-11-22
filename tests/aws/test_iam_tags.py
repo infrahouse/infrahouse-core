@@ -10,9 +10,11 @@ from dataclasses import dataclass
 from typing import Optional
 from unittest import mock
 
-import boto3
 import pytest
+from botocore import xform_name
 from botocore.exceptions import ClientError
+from botocore.loaders import create_loader
+from botocore.model import ServiceModel
 
 from infrahouse_core.aws.iam_group import IAMGroup
 from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile
@@ -118,15 +120,22 @@ parametrize_specs = pytest.mark.parametrize("spec", SPECS, ids=str)
 
 
 @parametrize_specs
-def test_spec_matches_botocore(spec):
-    """The operation and parameter names the tests expect exist in botocore's IAM model."""
-    client = boto3.client("iam", region_name="us-east-1")
-    model = client.meta.service_model
+def test_spec_matches_botocore(spec, monkeypatch):
+    """The operation and parameter names the tests expect exist in botocore's IAM model.
+
+    The model comes from botocore's data files, not from a client or session, so no AWS config is read. The
+    profile below doesn't exist: building a client or session here would fail with ``ProfileNotFound``.
+    """
+    monkeypatch.setenv("AWS_PROFILE", "infrahouse-core-unit-tests-no-such-profile")
+    loader = create_loader()
+    model = ServiceModel(loader.load_service_model("iam", "service-2"))
+    paginators = loader.load_service_model("iam", "paginators-1")["pagination"]
+    api_names = {xform_name(op): op for op in model.operation_names}
 
     def input_members(op):
-        return set(model.operation_model(client.meta.method_to_api_mapping[op]).input_shape.members)
+        return set(model.operation_model(api_names[op]).input_shape.members)
 
-    assert client.can_paginate(spec.list_op)
+    assert api_names[spec.list_op] in paginators
     assert spec.id_param in input_members(spec.list_op)
     assert {spec.id_param, "Tags"} <= input_members(spec.tag_op)
     assert {spec.id_param, "TagKeys"} <= input_members(spec.untag_op)
