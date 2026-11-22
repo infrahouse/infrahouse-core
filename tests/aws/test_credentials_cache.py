@@ -238,8 +238,13 @@ def test_a_bare_json_value_is_a_miss(cache, value):
 
 
 def test_randomly_corrupted_files_never_make_load_raise(cache):
-    """Flip, insert and delete bytes of a valid file, with a fixed seed: every result loads or misses."""
-    valid = json.dumps(_record(expires_at=time.time() + 3600)).encode()
+    """Flip, insert and delete bytes of a valid file, with a fixed seed: every result loads or misses.
+
+    A mutation can leave a valid record with different data (``"token"`` cut to ``"toke"``), so any dict is a
+    correct result; the property is that load() never raises.
+    """
+    # An int expiry, so digits inserted into it make an int too large for a float rather than a float infinity.
+    valid = json.dumps(_record(expires_at=int(time.time()) + 3600)).encode()
     rng = random.Random(154)
     for _ in range(2000):
         content = bytearray(valid)
@@ -249,12 +254,15 @@ def test_randomly_corrupted_files_never_make_load_raise(cache):
             if action == "flip" and position < len(content):
                 content[position] = rng.randrange(256)
             elif action == "insert":
-                content[position:position] = rng.choice((b"[", b"{", b"9" * 400, b"\xff", b"e999", b'"', b","))
+                content[position:position] = rng.choice(
+                    (b"[", b"{", b"[" * 5000, b'{"a":' * 5000, b"9" * 400, b"\xff", b"e999", b'"', b",")
+                )
             elif position < len(content):
                 del content[position]
         _write(cache, bytes(content))
 
-        assert cache.load("dev") in (None, {"token": "t"}), bytes(content)
+        result = cache.load("dev")
+        assert result is None or isinstance(result, dict), bytes(content)
 
 
 def test_load_treats_an_oversized_file_as_a_miss(cache):
