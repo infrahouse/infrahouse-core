@@ -1,8 +1,9 @@
 """Unit tests for the IAM-native tag helpers and ``arn`` on the IAM resource classes.
 
 IAM has no ``list_tags_for_resource``; each taggable IAM entity has its own
-``list_*_tags`` / ``tag_*`` / ``untag_*`` calls.  Every test here runs once per
-class in :data:`SPECS`, so each class is checked against its own API.
+``list_*_tags`` / ``tag_*`` / ``untag_*`` calls.  The parametrized tests run
+once per class in :data:`SPECS`, so each class is checked against its own API.
+IAM groups can't be tagged; the tests at the end cover what ``IAMGroup`` does.
 """
 
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ import boto3
 import pytest
 from botocore.exceptions import ClientError
 
+from infrahouse_core.aws.iam_group import IAMGroup
 from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile
 from infrahouse_core.aws.iam_policy import IAMPolicy
 from infrahouse_core.aws.iam_role import IAMRole
@@ -316,3 +318,26 @@ def test_remove_tag_missing_makes_no_call(spec):
         assert _resource(spec).remove_tag("Env") is False
 
     _assert_no_writes(spec, client)
+
+
+# -- IAMGroup ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(lambda g: g.tags, id="tags"),
+        pytest.param(lambda g: g.set_tag("Env", "prod"), id="set_tag"),
+        pytest.param(lambda g: g.set_tags({"Env": "prod"}), id="set_tags"),
+        pytest.param(lambda g: g.remove_tag("Env"), id="remove_tag"),
+    ],
+)
+def test_group_tag_helpers_say_groups_cannot_be_tagged(call):
+    """IAM has no tag API for groups; the helpers say so instead of "does not implement arn"."""
+    client = mock.MagicMock()
+
+    with mock.patch.object(IAMGroup, "_client", new_callable=mock.PropertyMock, return_value=client):
+        with pytest.raises(NotImplementedError, match="IAM group my-group can't be tagged"):
+            call(IAMGroup("my-group"))
+
+    assert not client.mock_calls
