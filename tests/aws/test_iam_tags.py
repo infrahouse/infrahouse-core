@@ -13,6 +13,7 @@ import boto3
 import pytest
 from botocore.exceptions import ClientError
 
+from infrahouse_core.aws.iam_instance_profile import IAMInstanceProfile
 from infrahouse_core.aws.iam_policy import IAMPolicy
 from infrahouse_core.aws.iam_role import IAMRole
 from infrahouse_core.aws.iam_user import IAMUser
@@ -42,6 +43,16 @@ SPECS = [
     IAMTagSpec(IAMRole, "my-role", "RoleName", "list_role_tags", "tag_role", "untag_role", "get_role", "Role"),
     IAMTagSpec(IAMUser, "my-user", "UserName", "list_user_tags", "tag_user", "untag_user", "get_user", "User"),
     IAMTagSpec(IAMPolicy, POLICY_ARN, "PolicyArn", "list_policy_tags", "tag_policy", "untag_policy", None, None),
+    IAMTagSpec(
+        IAMInstanceProfile,
+        "my-profile",
+        "InstanceProfileName",
+        "list_instance_profile_tags",
+        "tag_instance_profile",
+        "untag_instance_profile",
+        "get_instance_profile",
+        "InstanceProfile",
+    ),
 ]
 SPECS_WITH_GET = [spec for spec in SPECS if spec.get_op]
 

@@ -104,3 +104,59 @@ class IAMInstanceProfile(AWSResource):
                 LOG.debug("Role already removed from instance profile %s", self._resource_id)
             else:
                 raise
+
+    # -- Tag helpers (IAM instance profile-specific) -------------------------
+    #
+    # IAM has no ``list_tags_for_resource``.  Instance profiles use
+    # ``list_instance_profile_tags`` / ``tag_instance_profile`` /
+    # ``untag_instance_profile``, keyed by instance profile name.
+
+    @property
+    def arn(self) -> str:
+        """Return the ARN of the instance profile, from ``get_instance_profile``.
+
+        :raises ClientError: ``NoSuchEntity`` if the instance profile does not exist.
+        """
+        return self._client.get_instance_profile(InstanceProfileName=self._resource_id)["InstanceProfile"]["Arn"]
+
+    @property
+    def tags(self) -> dict:
+        """Return current tags as a ``{key: value}`` dict, read from every page of ``list_instance_profile_tags``.
+
+        :raises ClientError: ``NoSuchEntity`` if the instance profile does not exist.
+        """
+        paginator = self._client.get_paginator("list_instance_profile_tags")
+        pages = paginator.paginate(InstanceProfileName=self._resource_id)
+        return {tag["Key"]: tag["Value"] for page in pages for tag in page["Tags"]}
+
+    def set_tag(self, key: str, value: str) -> bool:
+        """Set one tag with ``tag_instance_profile``.  Same contract as :meth:`AWSResource.set_tag`."""
+        if self.tags.get(key) == value:
+            return False
+        self._client.tag_instance_profile(InstanceProfileName=self._resource_id, Tags=[{"Key": key, "Value": value}])
+        LOG.info("Set tag %s=%s on IAM instance profile %s", key, value, self._resource_id)
+        return True
+
+    def set_tags(self, tags: dict) -> int:
+        """Set the changed tags with one ``tag_instance_profile`` call.
+
+        Same contract as :meth:`AWSResource.set_tags`.
+        """
+        current = self.tags
+        to_write = {k: v for k, v in tags.items() if current.get(k) != v}
+        if not to_write:
+            return 0
+        self._client.tag_instance_profile(
+            InstanceProfileName=self._resource_id,
+            Tags=[{"Key": k, "Value": v} for k, v in to_write.items()],
+        )
+        LOG.info("Set %d tag(s) on IAM instance profile %s", len(to_write), self._resource_id)
+        return len(to_write)
+
+    def remove_tag(self, key: str) -> bool:
+        """Remove one tag with ``untag_instance_profile``.  Same contract as :meth:`AWSResource.remove_tag`."""
+        if key not in self.tags:
+            return False
+        self._client.untag_instance_profile(InstanceProfileName=self._resource_id, TagKeys=[key])
+        LOG.info("Removed tag %s from IAM instance profile %s", key, self._resource_id)
+        return True
