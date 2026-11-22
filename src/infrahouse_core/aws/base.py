@@ -75,11 +75,16 @@ class AWSResource(ABC):
     # The default implementations use the AWS-wide generic tagging API
     # (``list_tags_for_resource`` / ``tag_resource`` / ``untag_resource``),
     # which covers CloudWatch Logs, RDS, Lambda, KMS, Secrets Manager, SNS,
-    # SQS, Step Functions, and many other services.  Subclasses whose
-    # service uses a different tag API (EC2 ``create_tags``, S3
-    # ``put_bucket_tagging``, IAM ``tag_role``, etc.) should override these
-    # methods.  All subclasses that want tag support must implement
-    # :attr:`arn`.
+    # SQS, Step Functions, and many other services.  They need :attr:`arn`,
+    # so a subclass that relies on them must implement it.
+    #
+    # Subclasses whose service uses a different tag API (EC2
+    # ``create_tags``, S3 ``put_bucket_tagging``, IAM ``tag_role``, etc.)
+    # override these methods instead.  ``S3Bucket`` does, and so do the IAM
+    # role, user, policy and instance profile classes, each with its own
+    # ``list_*_tags`` / ``tag_*`` / ``untag_*`` calls.  Those overrides don't
+    # use :attr:`arn`; the IAM classes implement it anyway.  IAM groups can't
+    # be tagged, so ``IAMGroup``'s helpers raise ``NotImplementedError``.
 
     @property
     def arn(self) -> str:
