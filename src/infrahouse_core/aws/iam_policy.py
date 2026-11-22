@@ -225,3 +225,52 @@ class IAMPolicy(AWSResource):
                 VersionId=version_id,
             )
             LOG.debug("Deleted policy version %s of %s", version_id, self._resource_id)
+
+    # -- Tag helpers (IAM policy-specific) -----------------------------------
+    #
+    # IAM has no ``list_tags_for_resource``.  Managed policies use
+    # ``list_policy_tags`` / ``tag_policy`` / ``untag_policy``, keyed by
+    # policy ARN.
+
+    @property
+    def arn(self) -> str:
+        """Return the ARN of the policy.
+
+        The resource id is already the ARN, so no API call is made.
+        """
+        return self._resource_id
+
+    @property
+    def tags(self) -> dict:
+        """Return current tags as a ``{key: value}`` dict, read from every page of ``list_policy_tags``.
+
+        :raises ClientError: ``NoSuchEntity`` if the policy does not exist.
+        """
+        pages = self._client.get_paginator("list_policy_tags").paginate(PolicyArn=self._resource_id)
+        return {tag["Key"]: tag["Value"] for page in pages for tag in page["Tags"]}
+
+    def set_tag(self, key: str, value: str) -> bool:
+        """Set one tag with ``tag_policy``.  Same contract as :meth:`AWSResource.set_tag`."""
+        if self.tags.get(key) == value:
+            return False
+        self._client.tag_policy(PolicyArn=self._resource_id, Tags=[{"Key": key, "Value": value}])
+        LOG.info("Set tag %s=%s on IAM policy %s", key, value, self._resource_id)
+        return True
+
+    def set_tags(self, tags: dict) -> int:
+        """Set the changed tags with one ``tag_policy`` call.  Same contract as :meth:`AWSResource.set_tags`."""
+        current = self.tags
+        to_write = {k: v for k, v in tags.items() if current.get(k) != v}
+        if not to_write:
+            return 0
+        self._client.tag_policy(PolicyArn=self._resource_id, Tags=[{"Key": k, "Value": v} for k, v in to_write.items()])
+        LOG.info("Set %d tag(s) on IAM policy %s", len(to_write), self._resource_id)
+        return len(to_write)
+
+    def remove_tag(self, key: str) -> bool:
+        """Remove one tag with ``untag_policy``.  Same contract as :meth:`AWSResource.remove_tag`."""
+        if key not in self.tags:
+            return False
+        self._client.untag_policy(PolicyArn=self._resource_id, TagKeys=[key])
+        LOG.info("Removed tag %s from IAM policy %s", key, self._resource_id)
+        return True
