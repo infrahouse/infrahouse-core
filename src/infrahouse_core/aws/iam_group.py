@@ -197,3 +197,42 @@ class IAMGroup(AWSResource):
             LOG.info("Removing %d users from group %s", len(users), self._resource_id)
         for user in users:
             self.remove_user(user)
+
+    # -- Tag helpers ---------------------------------------------------------
+    #
+    # IAM groups can't be tagged: IAM has no tag API for groups.  The
+    # inherited helpers would fail with a misleading "IAMGroup does not
+    # implement arn", so each one raises NotImplementedError (the same
+    # exception type) with a message that says why.
+
+    @property
+    def tags(self) -> dict:
+        """IAM groups can't be tagged.
+
+        :raises NotImplementedError: always.
+        """
+        raise self._cannot_be_tagged()
+
+    def set_tag(self, key: str, value: str) -> bool:
+        """IAM groups can't be tagged.
+
+        :raises NotImplementedError: always.
+        """
+        raise self._cannot_be_tagged()
+
+    def set_tags(self, tags: dict) -> int:
+        """IAM groups can't be tagged.
+
+        :raises NotImplementedError: always.
+        """
+        raise self._cannot_be_tagged()
+
+    def remove_tag(self, key: str) -> bool:
+        """IAM groups can't be tagged.
+
+        :raises NotImplementedError: always.
+        """
+        raise self._cannot_be_tagged()
+
+    def _cannot_be_tagged(self) -> NotImplementedError:
+        return NotImplementedError(f"IAM group {self._resource_id} can't be tagged: IAM has no tag API for groups")
