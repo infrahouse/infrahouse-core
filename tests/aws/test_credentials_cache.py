@@ -383,11 +383,23 @@ def test_save_writes_a_temp_file_in_the_same_directory_then_renames_it(cache, ca
 
 
 def test_failed_serialisation_leaves_the_previous_file_intact(cache, cache_dir):
-    """json.dump fails half-way through: the old record stays readable and no temp file is left behind."""
+    """Data JSON can't represent fails before anything is written: the old record stays, no temp file appears."""
     cache.save("dev", {"token": "old"}, expires_at=time.time() + 3600)
 
     with pytest.raises(TypeError):
         cache.save("dev", {"token": "new", "unserialisable": object()}, expires_at=time.time() + 3600)
+
+    assert cache.load("dev") == {"token": "old"}
+    assert os.listdir(cache_dir) == [os.path.basename(cache.path("dev"))]
+
+
+def test_failed_fsync_after_writing_removes_the_temp_file(cache, cache_dir):
+    """The temp file is written but fsync fails (an I/O error): it never reaches the final name, and it is removed."""
+    cache.save("dev", {"token": "old"}, expires_at=time.time() + 3600)
+
+    with mock.patch("os.fsync", side_effect=OSError("I/O error")):
+        with pytest.raises(OSError, match="I/O error"):
+            cache.save("dev", {"token": "new"}, expires_at=time.time() + 3600)
 
     assert cache.load("dev") == {"token": "old"}
     assert os.listdir(cache_dir) == [os.path.basename(cache.path("dev"))]
