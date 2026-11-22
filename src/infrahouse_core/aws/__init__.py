@@ -19,13 +19,12 @@ import hashlib
 import inspect
 import json
 import sys
-import time
 import webbrowser
 from logging import getLogger
-from os import environ, makedirs
-from os import path as osp
+from os import environ
 from pprint import pformat
 from time import sleep
+from typing import Optional
 
 import boto3
 import requests
@@ -36,11 +35,10 @@ from botocore.exceptions import (
     SSOTokenLoadError,
     TokenRetrievalError,
 )
-from diskcache import Cache
 
 from infrahouse_core.aws.config import AWSConfig
+from infrahouse_core.aws.credentials_cache import CredentialsCache
 from infrahouse_core.aws.exceptions import IHAWSException
-from infrahouse_core.fs import ensure_permissions
 
 VALUE_MAP = {
     "AWS_ACCESS_KEY_ID": "AccessKeyId",
@@ -55,6 +53,10 @@ VALUE_MAP = {
 }
 
 LOG = getLogger(__name__)
+
+# Renaming the namespace renames every user's cache file, which costs each of them one more SSO approval per profile.
+_ROLE_CREDENTIALS_NAMESPACE = "sso-role-credentials"
+_ROLE_CREDENTIALS_KEYS = ("accessKeyId", "secretAccessKey", "sessionToken")
 
 
 def assume_role(role_arn, region=None, session_name=None) -> dict:
@@ -320,30 +322,35 @@ def get_secret(secretsmanager_client, secret_name: str) -> str:
     return secret_value
 
 
-def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: str = None):
+def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: Optional[str] = None) -> Session:
     """
     Login into AWS using SSO.
 
+    The profile's role credentials are cached as a JSON file in ``~/.infrahouse-toolkit`` (see
+    :class:`~infrahouse_core.aws.credentials_cache.CredentialsCache`). Until five minutes before they expire,
+    later calls for the same profile reuse them instead of asking for another SSO approval. A cache file that is
+    missing, corrupt or about to expire is replaced after a fresh SSO login.
+
     Credit:
     https://stackoverflow.com/questions/62311866/how-to-use-the-aws-python-sdk-while-connecting-via-sso-credentials
+
+    :param aws_config: AWS config with the profile's SSO settings.
+    :type aws_config: AWSConfig
+    :param profile_name: AWS profile to log in with.
+    :type profile_name: str
+    :param region: Region for the returned session. Defaults to the profile's region.
+    :type region: str
+    :return: A session authenticated with the profile's SSO role credentials.
+    :rtype: Session
+    :raise IHAWSException: If the SSO login fails or the user doesn't approve it in time.
+    :raise OSError: If the cache directory or file can't be written.
     """
-    cache_directory = osp.expanduser("~/.infrahouse-toolkit")
-
-    # Ensure directory exists with secure permissions BEFORE use to prevent race condition
-    # where credentials could be exposed with default permissions
-    makedirs(cache_directory, mode=0o700, exist_ok=True)
-    ensure_permissions(cache_directory, 0o700)
-
-    with Cache(directory=cache_directory) as cache_reference:
-        cache_key = f"ih-ec2-credentials-{profile_name}"
-        credentials = cache_reference.get(cache_key)
-        if not credentials:
-            credentials = _get_credentials(aws_config, profile_name)
-            cache_reference.set(
-                cache_key,
-                credentials,
-                expire=int(int(credentials["expiration"]) / 1000 - int(time.time())),
-            )
+    cache = CredentialsCache(_ROLE_CREDENTIALS_NAMESPACE)
+    credentials = cache.load(profile_name, required_keys=_ROLE_CREDENTIALS_KEYS)
+    if credentials is None:
+        credentials = _get_credentials(aws_config, profile_name)
+        # get_role_credentials() gives the expiration in milliseconds since the epoch.
+        cache.save(profile_name, credentials, expires_at=int(credentials["expiration"]) / 1000)
 
     return Session(
         region_name=region or aws_config.get_region(profile_name),
