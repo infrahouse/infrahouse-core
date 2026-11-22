@@ -207,13 +207,6 @@ class GitHubActions:
     def __init__(self, github: GitHubAuth, region: str = None, role_arn: str = None):
         """
         Initialize the GitHubActions manager.
-
-        :param github: GitHub authentication object.
-        :type github: GitHubAuth
-        :param region: AWS region for Secrets Manager operations.
-        :type region: str
-        :param role_arn: IAM role ARN to assume for cross-account access.
-        :type role_arn: str
         """
         self._github = github
         self._region = region
