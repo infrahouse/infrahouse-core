@@ -72,11 +72,11 @@ clean-test:
 
 .PHONY: black
 black: ## reformat code with black
-	black src tests
+	black src tests scripts
 
 .PHONY: isort
 isort: ## reformat imports
-	isort src tests
+	isort src tests scripts
 
 .PHONY: mdformat
 mdformat: ## format markdown files
@@ -91,11 +91,11 @@ lint/yaml: ## check style with yamllint
 
 .PHONY: lint/black
 lint/black: ## check style with black
-	black --check --diff src
+	black --check --diff src scripts
 
 .PHONY: lint/isort
 lint/isort: ## check imports formatting
-	isort --check-only src tests
+	isort --check-only src tests scripts
 
 .PHONY: lint/mdformat
 lint/mdformat:
@@ -103,7 +103,7 @@ lint/mdformat:
 
 .PHONY: lint/pylint
 lint/pylint: ## check style with pylint
-	pylint src
+	pylint src scripts
 
 
 .PHONY: test
