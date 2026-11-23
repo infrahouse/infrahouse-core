@@ -41,11 +41,13 @@ import boto3
 import botocore
 import dateutil.parser
 from botocore.credentials import SSOProvider
+from botocore.exceptions import BotoCoreError, ClientError
 from botocore.tokens import SSOTokenProvider
 
 import infrahouse_core
 import infrahouse_core.aws as ih_aws
 from infrahouse_core.aws.config import AWSConfig
+from infrahouse_core.aws.exceptions import IHAWSException
 
 _CHECKOUT_SRC = Path(__file__).resolve().parent.parent / "src"
 # Set in the environment of the child process that runs the checks. The parent process only makes the sandbox.
@@ -432,7 +434,9 @@ def _check_login(  # pylint: disable=too-many-arguments,too-many-positional-argu
     try:
         session = ih_aws.get_aws_session(config, profile, region, use_device_code=args.device_code)
         arn = session.client("sts").get_caller_identity()["Arn"]
-    except Exception as err:  # pylint: disable=broad-exception-caught
+    # Only the errors of a login that AWS or the user refused. Anything else is a bug that the script is here to find,
+    # so it ends the run with its traceback.
+    except (IHAWSException, BotoCoreError, ClientError) as err:
         report.check(False, f"{profile}: get_aws_session() logs in and connects", f"{type(err).__name__}: {err}")
         return False
 
@@ -539,7 +543,7 @@ def _check_other_profiles(report: _Report, config: AWSConfig, profiles: List[str
             arn = session.client("sts").get_caller_identity()["Arn"]
         except _SecondLogin:
             report.check(False, expected, "it asked for another login")
-        except Exception as err:  # pylint: disable=broad-exception-caught
+        except (BotoCoreError, ClientError) as err:
             report.check(False, expected, f"{type(err).__name__}: {err}")
         else:
             report.check(True, f"{expected}, as {arn}")
@@ -608,7 +612,7 @@ def _check_refresh(report: _Report, args: argparse.Namespace, profile: str, regi
     expected = "botocore refreshes a token that expires in 5 minutes"
     try:
         boto3.Session(profile_name=profile, region_name=region).client("sts").get_caller_identity()
-    except Exception as err:  # pylint: disable=broad-exception-caught
+    except (BotoCoreError, ClientError) as err:
         report.check(False, expected, f"{type(err).__name__}: {err}")
         return
     refreshed = json.loads(token_path.read_text(encoding="utf-8"))
