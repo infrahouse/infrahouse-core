@@ -8,7 +8,9 @@ parameters ih-aws sends are checked against the service model, and no request le
 patched, so no browser opens.
 """
 
+import hashlib
 import http.client
+import json
 import os
 import threading
 import time
@@ -20,8 +22,10 @@ from unittest import mock
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import boto3
+import botocore.handlers
 import pytest
 from botocore import UNSIGNED
+from botocore.awsrequest import AWSResponse
 from botocore.config import Config
 from botocore.credentials import SSOProvider
 from botocore.stub import ANY, Stubber
@@ -415,3 +419,101 @@ def no_sleep(monkeypatch):
     sleeper = mock.MagicMock(name="sleep")
     monkeypatch.setattr(sso_login, "sleep", sleeper)
     return sleeper
+
+
+# --- AWS over HTTP ---
+
+
+class _Body:
+    """The raw body of a fake HTTP response, as botocore reads it."""
+
+    def __init__(self, data: bytes):
+        self._data = data
+
+    def stream(self, **kwargs):  # pylint: disable=unused-argument
+        yield self._data
+
+
+class FakeAWS:
+    """
+    Answers botocore's HTTP requests to the SSO portal (GetRoleCredentials) and to STS (GetCallerIdentity).
+
+    It is a ``before-send`` handler on every botocore session the test creates, so everything up to the HTTP request
+    runs for real: profile and token loading, credential resolution, request signing, and the errors botocore raises.
+    GetRoleCredentials accepts only the tokens in ``valid_tokens`` and answers any other with 401
+    UnauthorizedException, as AWS does for a revoked token or an ended SSO session. Any other request fails the test.
+    """
+
+    ROLE_ACCESS_KEY = "ASIAFAKEROLEACCESSKEY"
+    ROLE_SECRET_KEY = "fake-role-secret-access-key"
+
+    def __init__(self):
+        self.valid_tokens = {ACCESS_TOKEN}
+        self.role_credential_tokens: List[str] = []
+        self.sts_authorizations: List[str] = []
+
+    def __call__(self, request, **kwargs):  # pylint: disable=unused-argument
+        url = urlsplit(request.url)
+        if url.hostname.startswith("portal.sso."):
+            return self._get_role_credentials(request, url)
+        if url.hostname.startswith("sts."):
+            self.sts_authorizations.append(_text(request.headers["Authorization"]))
+            return AWSResponse(request.url, 200, {"Content-Type": "text/xml"}, _Body(STS_RESPONSE))
+        raise AssertionError(f"Unexpected request to {url.hostname}")
+
+    def _get_role_credentials(self, request, url):
+        token = _text(request.headers["x-amz-sso_bearer_token"])
+        self.role_credential_tokens.append(token)
+        if token not in self.valid_tokens:
+            body = json.dumps({"message": "Session token not found or invalid"}).encode()
+            return AWSResponse(request.url, 401, {"x-amzn-ErrorType": "UnauthorizedException"}, _Body(body))
+        body = json.dumps(
+            {
+                "roleCredentials": {
+                    "accessKeyId": self.ROLE_ACCESS_KEY,
+                    "secretAccessKey": self.ROLE_SECRET_KEY,
+                    "sessionToken": "fake-role-session-token",
+                    "expiration": int((time.time() + 3600) * 1000),
+                    "accountId": parse_qs(url.query)["account_id"][0],
+                }
+            }
+        ).encode()
+        return AWSResponse(request.url, 200, {"Content-Type": "application/json"}, _Body(body))
+
+
+STS_RESPONSE = b"""<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <GetCallerIdentityResult>
+    <Arn>arn:aws:sts::111111111111:assumed-role/AdministratorAccess/me</Arn>
+    <UserId>AROAFAKEUSERID:me</UserId>
+    <Account>111111111111</Account>
+  </GetCallerIdentityResult>
+  <ResponseMetadata><RequestId>01234567-89ab-cdef-0123-456789abcdef</RequestId></ResponseMetadata>
+</GetCallerIdentityResponse>
+"""
+
+
+def _text(value) -> str:
+    return value.decode() if isinstance(value, bytes) else value
+
+
+@pytest.fixture
+def fake_aws(home, monkeypatch) -> FakeAWS:
+    """Answer the SSO portal and STS over HTTP for every botocore session created from now on."""
+    fake = FakeAWS()
+    monkeypatch.setattr(
+        botocore.handlers, "BUILTIN_HANDLERS", list(botocore.handlers.BUILTIN_HANDLERS) + [("before-send", fake)]
+    )
+    return fake
+
+
+def write_cli_token(cache_dir: str, access_token: str, expires_in: int) -> str:
+    """Write a token file as `aws sso login` would, without refresh fields. Returns its path."""
+    os.makedirs(cache_dir, mode=0o700, exist_ok=True)
+    path = osp.join(cache_dir, hashlib.sha1(SSO_SESSION.encode("utf-8")).hexdigest() + ".json")
+    expires_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + expires_in))
+    with open(path, "w", encoding="utf-8") as token_file:
+        json.dump(
+            {"startUrl": START_URL, "region": SSO_REGION, "accessToken": access_token, "expiresAt": expires_at},
+            token_file,
+        )
+    return path

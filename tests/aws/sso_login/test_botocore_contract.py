@@ -13,7 +13,6 @@ from os import path as osp
 import boto3
 import botocore.session
 import pytest
-from botocore.awsrequest import AWSResponse
 from botocore.exceptions import (
     SSOError,
     SSOTokenLoadError,
@@ -60,21 +59,22 @@ def test_expired_token_without_refresh(aws_config, token_cache_dir):
         load_token()
 
 
-def test_revoked_token(aws_config, token_cache_dir):
-    """A token that hasn't reached expiresAt but that AWS rejects, e.g. after the SSO session ended."""
+def test_revoked_token(aws_config, token_cache_dir, fake_aws):
+    """
+    A token that hasn't reached expiresAt but that AWS rejects, e.g. after the SSO session ended.
+
+    botocore raises UnauthorizedSSOTokenError while it signs an STS request, which is where get_aws_session meets it,
+    and lets it out of the client call unchanged.
+    """
     write_token_file(token_cache_dir, token(datetime.now(timezone.utc) + timedelta(hours=4)))
-    session = boto3.Session(profile_name=PROFILE_B)
 
-    def unauthorized(**kwargs):  # pylint: disable=unused-argument
-        return AWSResponse(None, 401, {}, None), {
-            "Error": {"Code": "UnauthorizedException", "Message": "Session token not found or invalid"},
-            "ResponseMetadata": {"HTTPStatusCode": 401},
-        }
-
-    session.events.register("before-call.sso.GetRoleCredentials", unauthorized)
     with pytest.raises(UnauthorizedSSOTokenError) as exc_info:
-        session.get_credentials().get_frozen_credentials()
+        boto3.Session(profile_name=PROFILE_B).client("sts", region_name="us-east-1").get_caller_identity()
+
     assert isinstance(exc_info.value, SSOError)
+    assert fake_aws.role_credential_tokens == ["some-access-token"]
+    # The STS request was never sent: botocore failed to get credentials to sign it.
+    assert not fake_aws.sts_authorizations
 
 
 @pytest.mark.parametrize("content, error", [("{not json", KeyError), ("", KeyError), ("null", TypeError)])
