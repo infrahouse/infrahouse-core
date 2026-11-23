@@ -223,6 +223,45 @@ def test_overwrites_previous_token(aws_config, oidc, browser, token_cache_dir):
     assert os.listdir(token_cache_dir) == [osp.basename(token_path(token_cache_dir))]
 
 
+def in_place_setitem(self, cache_key, value):
+    """
+    ``JSONFileCache.__setitem__`` as botocore 1.36.0 to 1.42.10 has it.
+
+    It writes into an existing file in place, so the file keeps its mode: ``os.open`` applies 0600 only when it creates
+    the file. From 1.42.11, botocore writes a ``mkstemp`` file and renames it over the old one.
+    """
+    full_key = self._convert_cache_key(cache_key)  # pylint: disable=protected-access
+    file_content = self._dumps(value)  # pylint: disable=protected-access
+    if not os.path.isdir(self._working_dir):  # pylint: disable=protected-access
+        os.makedirs(self._working_dir)  # pylint: disable=protected-access
+    with os.fdopen(os.open(full_key, os.O_WRONLY | os.O_CREAT, 0o600), "w") as cache_file:
+        cache_file.truncate()
+        cache_file.write(file_content)
+
+
+@pytest.mark.parametrize("write_path", ["installed-botocore", "botocore-1.36-to-1.42.10"])
+@pytest.mark.parametrize("existing_mode", [0o644, 0o666, 0o600])
+def test_existing_token_file_ends_up_0600(
+    aws_config, oidc, browser, token_cache_dir, monkeypatch, write_path, existing_mode
+):
+    """An old token file with a loose mode, e.g. from an older tool, is replaced by a 0600 file on every botocore."""
+    if write_path != "installed-botocore":
+        monkeypatch.setattr(JSONFileCache, "__setitem__", in_place_setitem)
+    os.makedirs(token_cache_dir, mode=0o700)
+    path = token_path(token_cache_dir)
+    with open(path, "w", encoding="utf-8") as token_file:
+        json.dump({"startUrl": START_URL, "accessToken": "old-token", "expiresAt": "2020-01-01T00:00:00Z"}, token_file)
+    os.chmod(path, existing_mode)
+    oidc.expect_pkce_login()
+
+    aws_sso_login(aws_config, PROFILE_A)
+
+    assert mode(path) == 0o600
+    with open(path, encoding="utf-8") as token_file:
+        assert json.load(token_file)["accessToken"] == ACCESS_TOKEN
+    assert os.listdir(token_cache_dir) == [osp.basename(path)]
+
+
 # --- The cache directory ---
 
 
