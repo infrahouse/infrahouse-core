@@ -17,6 +17,7 @@ Two login flows are used, as in the AWS CLI v2:
 """
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import os
@@ -150,7 +151,7 @@ def aws_sso_login(
 
     token = _log_in(login, use_device_code)
 
-    SSOTokenLoader(JSONFileCache(cache_dir, dumps_func=_dump_sso_token)).save_token(
+    SSOTokenLoader(_TokenFileCache(cache_dir, dumps_func=_dump_sso_token)).save_token(
         login.start_url, token, session_name=session_name
     )
     LOG.info(
@@ -564,6 +565,28 @@ def _make_token(login: _Login, registration: dict, response: dict) -> dict:
     if "refreshToken" in response:
         token["refreshToken"] = response["refreshToken"]
     return token
+
+
+class _TokenFileCache(JSONFileCache):  # pylint: disable=too-few-public-methods
+    """
+    botocore's ``JSONFileCache``, except that it writes every token file as a new file, so that it is always mode 0600.
+
+    Up to botocore 1.42.10, ``JSONFileCache`` writes into an existing file in place, and the file keeps whatever mode
+    it had: ``os.open(..., O_WRONLY | O_CREAT, 0o600)`` applies the mode only when it creates the file. From 1.42.11 it
+    writes a ``mkstemp`` file and renames it over the old one. Removing the old file first makes every botocore that
+    ``boto3 ~= 1.36`` allows create the file at 0600. botocore still names, serialises and writes it.
+    """
+
+    def __setitem__(self, cache_key: str, value: Any) -> None:
+        """
+        Remove the cached file, if there is one, then let botocore write the new one.
+
+        :param cache_key: botocore's key for the file.
+        :param value: What to cache.
+        """
+        with contextlib.suppress(KeyError):
+            del self[cache_key]
+        super().__setitem__(cache_key, value)
 
 
 def _dump_sso_token(token: dict) -> str:
