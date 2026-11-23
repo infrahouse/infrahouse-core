@@ -146,6 +146,57 @@ class _LoginGuard:  # pylint: disable=too-few-public-methods
         return self._login(aws_config, profile_name, **kwargs)
 
 
+class _WarningRecorder(logging.Handler):
+    """
+    Keeps the warnings of one botocore logger, each with the error behind it, so that a failed check can say why.
+
+    botocore logs a failed token refresh at WARNING and goes on with the old token. The script keeps botocore at
+    ERROR, so while the recorder is in use, the logger is opened up to WARNING and its records go only here.
+
+    :param name: The logger, e.g. ``botocore.tokens``.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(logging.WARNING)
+        self.messages: List[str] = []
+        self._logger = logging.getLogger(name)
+        self._saved = (self._logger.level, self._logger.propagate)
+
+    def __enter__(self) -> "_WarningRecorder":
+        """
+        Start recording.
+
+        :return: The recorder.
+        """
+        self._saved = (self._logger.level, self._logger.propagate)
+        self._logger.setLevel(logging.WARNING)
+        self._logger.propagate = False
+        self._logger.addHandler(self)
+        return self
+
+    def __exit__(self, *exc_info: Any) -> None:
+        """
+        Stop recording, and put the logger back as it was.
+
+        :param exc_info: The exception that ended the block, if any.
+        """
+        self._logger.removeHandler(self)
+        self._logger.setLevel(self._saved[0])
+        self._logger.propagate = self._saved[1]
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """
+        Keep the record's message, and the error it carries.
+
+        :param record: A log record of the logger.
+        """
+        message = record.getMessage()
+        error = record.exc_info[1] if record.exc_info else None
+        if error is not None:
+            message += f" ({type(error).__name__}: {error})"
+        self.messages.append(message)
+
+
 class _FlowRecorder(logging.Handler):
     """Keeps the log lines in which the login says which flow it runs, and why."""
 
@@ -610,14 +661,16 @@ def _check_refresh(report: _Report, args: argparse.Namespace, profile: str, regi
         token_file.truncate()
 
     expected = "botocore refreshes a token that expires in 5 minutes"
-    try:
-        boto3.Session(profile_name=profile, region_name=region).client("sts").get_caller_identity()
-    except (BotoCoreError, ClientError) as err:
-        report.check(False, expected, f"{type(err).__name__}: {err}")
-        return
+    with _WarningRecorder("botocore.tokens") as warnings:
+        try:
+            boto3.Session(profile_name=profile, region_name=region).client("sts").get_caller_identity()
+        except (BotoCoreError, ClientError) as err:
+            report.check(False, expected, f"{type(err).__name__}: {err}")
+            return
     refreshed = json.loads(token_path.read_text(encoding="utf-8"))
+    why = " ".join(warnings.messages) or "botocore logged no warning."
     if not report.check(
-        refreshed.get("accessToken") != token["accessToken"], expected, "the access token didn't change"
+        refreshed.get("accessToken") != token["accessToken"], expected, f"the access token didn't change. {why}"
     ):
         return
     report.check(
