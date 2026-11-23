@@ -93,12 +93,12 @@ the login, and the URL and code to approve it, go to stderr. A run where every c
     PASS  the token has startUrl, region, accessToken, expiresAt, clientId, clientSecret, registrationExpiresAt
     PASS  its startUrl and region are the sso-session's
     PASS  the token has a refreshToken, so botocore can refresh it
-    PASS  expiresAt is 2026-11-23T22:40:53Z, in 7 h 59 min
+    PASS  expiresAt is 2026-11-23T15:40:53Z, in 0 h 59 min
     PASS  registrationExpiresAt is 2027-02-21T14:40:53Z, in 89 days
     PASS  prod: get_aws_session() connects with the same token, and no other login, as arn:aws:sts::222222222222:...
     PASS  aws sts get-caller-identity --profile prod uses the token, as arn:aws:sts::222222222222:...
     PASS  botocore refreshes a token that expires in 5 minutes
-    PASS  the new access token expires later, at 2026-11-23T15:40:54Z
+    PASS  the new access token expires later, at 2026-11-23T15:40:58Z
     PASS  the token file is still 0600
     INFO  The refreshed token has a refreshToken too.
 
@@ -131,8 +131,12 @@ What it checks
    ``aws sso login`` use, and the only file there. Its mode is 0600, and the mode of ``~/.aws/sso`` and
    ``~/.aws/sso/cache`` is 0700.
 #. **The token.** It has every key botocore needs to use and refresh it, including a ``refreshToken``. ``expiresAt``
-   and ``registrationExpiresAt`` are UTC times in botocore's format, and are in the future. ``expiresAt`` follows the
-   session length set in IAM Identity Center. The client registration lasts about 90 days.
+   and ``registrationExpiresAt`` are UTC times in botocore's format, and are in the future. The access token is
+   short-lived: AWS issues it for about an hour. botocore renews it with the ``refreshToken`` when it is used in its
+   last 15 minutes, for as long as the AWS access portal session lasts; after that, a new login is needed. The
+   session length is set in IAM Identity Center (see `Configure AWS access portal session duration
+   <https://docs.aws.amazon.com/singlesignon/latest/userguide/configure-user-session.html>`_). The client registration
+   lasts about 90 days.
 #. **The shared token.** ``get_aws_session()`` for each of the other profiles connects with the same token, and asks
    for no other login. ih-aws used to ask for an approval for every profile; this is the fix for
    `#141 <https://github.com/infrahouse/infrahouse-core/issues/141>`_.
