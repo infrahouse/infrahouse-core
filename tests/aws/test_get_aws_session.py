@@ -5,8 +5,8 @@ from unittest import mock
 import pytest
 from botocore.exceptions import (
     ClientError,
+    InvalidConfigError,
     NoRegionError,
-    PendingAuthorizationExpiredError,
     SSOError,
     SSOTokenLoadError,
     TokenRetrievalError,
@@ -119,7 +119,7 @@ OTHER_ERRORS = [
         ClientError({"Error": {"Code": "AccessDenied", "Message": "nope"}}, "GetCallerIdentity"), id="ClientError"
     ),
     pytest.param(NoRegionError(), id="NoRegionError"),
-    pytest.param(PendingAuthorizationExpiredError(), id="PendingAuthorizationExpiredError"),
+    pytest.param(InvalidConfigError(error_msg="The specified sso-session does not exist"), id="InvalidConfigError"),
 ]
 
 

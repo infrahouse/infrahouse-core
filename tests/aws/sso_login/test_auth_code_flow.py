@@ -319,7 +319,14 @@ def test_register_client_error(aws_config, oidc, browser, callback_servers):
 
 
 class StallingBrowser:
-    """Opens a connection to the callback server and holds it, sending a byte now and then or nothing at all."""
+    """
+    Opens a connection to the callback server and holds it, sending a byte now and then or nothing at all.
+
+    It lets go by itself after ``HOLD_SECONDS``, so that a server that waits for it makes the test fail on time instead
+    of hanging it.
+    """
+
+    HOLD_SECONDS = 4
 
     def __init__(self, drip: bool, then_callback: bool = False):
         self.drip = drip
@@ -348,7 +355,8 @@ class StallingBrowser:
         try:
             if self.then_callback:
                 threading.Thread(target=self._callback, args=(host, port, path, state), daemon=True).start()
-            while not self._stop.wait(0.05):
+            give_up = time.monotonic() + self.HOLD_SECONDS
+            while not self._stop.wait(0.05) and time.monotonic() < give_up:
                 if self.drip:
                     try:
                         stalled.sendall(b"G")
@@ -382,7 +390,7 @@ def test_stalled_connection_does_not_hold_the_wait(
     finally:
         stalling.stop()
 
-    assert time.monotonic() - start < 3
+    assert time.monotonic() - start < 2
     assert_stopped(callback_servers)
 
 
@@ -406,7 +414,7 @@ def test_stalled_connection_does_not_block_the_callback(
 
     assert session.profile_name == PROFILE_A
     assert stalling.status == 200
-    assert time.monotonic() - start < 5
+    assert time.monotonic() - start < 2
     assert_stopped(callback_servers)
 
 
