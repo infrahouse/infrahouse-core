@@ -75,7 +75,8 @@ In an SSH session the device flow runs without the flag. To try that fallback on
     SSH_TTY=1 python scripts/check_sso_login.py dev prod
 
 The first profile logs in, and the others must connect with its token. If you give only one profile, the script adds
-another profile of the same sso-session from your config, if it finds one.
+another profile of the same sso-session from your config, if it finds one. It prefers a profile with the same
+``sso_role_name``, so that the second profile has no more power than the first.
 
 The script prints one line per check, starting with ``PASS``, ``FAIL``, ``SKIP`` or ``INFO``, and a summary. The log of
 the login, and the URL and code to approve it, go to stderr. A run where every check passes looks like this:

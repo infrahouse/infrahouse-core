@@ -262,7 +262,8 @@ def _parse_args(argv: List[str]) -> argparse.Namespace:
         metavar="PROFILE",
         help=(
             "AWS profiles of one sso-session. The first logs in; the others must connect without another login. "
-            "With one profile, the script adds another profile of the same sso-session, if there is one."
+            "With one profile, the script adds another profile of the same sso-session, if there is one, preferring "
+            "one with the same sso_role_name."
         ),
     )
     parser.add_argument(
@@ -397,7 +398,8 @@ def _check_botocore_uses(sandbox: Path) -> None:
 
 def _pick_profiles(config: AWSConfig, names: List[str]) -> Tuple[List[str], str]:
     """
-    Check that the profiles exist and share one sso-session. With one profile, add another one of its sso-session.
+    Check that the profiles exist and share one sso-session. With one profile, add another one of its sso-session,
+    preferring one with the same ``sso_role_name``, so that the second profile has no more power than the first.
 
     :param config: The sandbox's AWS config.
     :param names: The profiles from the command line.
@@ -418,9 +420,12 @@ def _pick_profiles(config: AWSConfig, names: List[str]) -> Tuple[List[str], str]
     profiles = list(dict.fromkeys(names))
     session_name = sessions[profiles[0]]
     if len(profiles) == 1:
-        profiles += [
+        others = [
             other for other in config.profiles if other != profiles[0] and _sso_session(config, other) == session_name
-        ][:1]
+        ]
+        role = _sso_role_name(config, profiles[0])
+        same_role = [other for other in others if _sso_role_name(config, other) == role]
+        profiles += (same_role or others)[:1]
     return profiles, session_name
 
 
@@ -434,6 +439,20 @@ def _sso_session(config: AWSConfig, profile: str) -> Optional[str]:
     """
     try:
         return config.get_sso_session(profile)
+    except (NoOptionError, NoSectionError):
+        return None
+
+
+def _sso_role_name(config: AWSConfig, profile: str) -> Optional[str]:
+    """
+    Read a profile's ``sso_role_name``.
+
+    :param config: The AWS config.
+    :param profile: The profile.
+    :return: The name of its role, or None if it has none.
+    """
+    try:
+        return config.get_role(profile)
     except (NoOptionError, NoSectionError):
         return None
 
