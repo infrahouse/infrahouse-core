@@ -78,7 +78,10 @@ def test_prints_url_and_user_code(aws_config, oidc, browser, ssh, no_sleep, capf
     out, err = capfd.readouterr()
     assert VERIFICATION_URI in err
     assert USER_CODE in err
-    assert USER_CODE not in out
+    # The instructions go to stderr, so `eval "$(ih-aws ... credentials -e)"` still works. (An INFO log line also
+    # names the code; where it goes is up to the caller's logging setup.)
+    assert "enter the code" in err
+    assert "enter the code" not in out
 
 
 def test_saves_token(aws_config, oidc, browser, ssh, no_sleep, token_cache_dir):

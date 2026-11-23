@@ -175,6 +175,7 @@ def test_url_printed_to_stderr_not_stdout(aws_config, oidc, browser, capfd):
     out, err = capfd.readouterr()
     assert browser.authorize_url in err
     assert browser.authorize_url not in out
+    assert "open this URL" in err
 
 
 def test_state_and_verifier_differ_between_logins(aws_config, oidc, local_browser):
