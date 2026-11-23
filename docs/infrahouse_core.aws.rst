@@ -340,6 +340,14 @@ infrahouse\_core.aws.sqs\_queue module
    :undoc-members:
    :show-inheritance:
 
+infrahouse\_core.aws.sso\_login module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.sso_login
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 infrahouse\_core.aws.subnet module
 ----------------------------------
 

@@ -19,12 +19,8 @@ import hashlib
 import inspect
 import json
 import sys
-import webbrowser
 from logging import getLogger
 from os import environ
-from pprint import pformat
-from time import sleep
-from typing import Optional
 
 import boto3
 import requests
@@ -32,13 +28,13 @@ from boto3 import Session
 from botocore.exceptions import (
     ClientError,
     NoCredentialsError,
-    SSOTokenLoadError,
+    SSOError,
     TokenRetrievalError,
 )
 
 from infrahouse_core.aws.config import AWSConfig
-from infrahouse_core.aws.credentials_cache import CredentialsCache
 from infrahouse_core.aws.exceptions import IHAWSException
+from infrahouse_core.aws.sso_login import aws_sso_login
 
 VALUE_MAP = {
     "AWS_ACCESS_KEY_ID": "AccessKeyId",
@@ -53,10 +49,6 @@ VALUE_MAP = {
 }
 
 LOG = getLogger(__name__)
-
-# Renaming the namespace renames every user's cache file, which costs each of them one more SSO approval per profile.
-_ROLE_CREDENTIALS_NAMESPACE = "sso-role-credentials"
-_ROLE_CREDENTIALS_KEYS = ("accessKeyId", "secretAccessKey", "sessionToken")
 
 
 def assume_role(role_arn, region=None, session_name=None) -> dict:
@@ -118,13 +110,37 @@ def _has_env_credentials() -> bool:
     return bool(environ.get("AWS_ACCESS_KEY_ID") and environ.get("AWS_SECRET_ACCESS_KEY"))
 
 
-def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) -> Session:
+def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str, use_device_code: bool = False) -> Session:
     """
+    Get an AWS session for a profile, logging in with SSO only when boto3 can't connect on its own.
 
-    :param aws_config:
-    :param aws_profile:
-    :param aws_region:
-    :return: Authenticated AWS session, or None if boto3 can connect to AWS without extra steps.
+    The session is first tried as a plain boto3 ``Session(profile_name=aws_profile)``. For a profile with an
+    ``sso_session``, botocore reads the SSO token from the AWS CLI's shared token cache,
+    ``~/.aws/sso/cache/<sha1 of the sso-session name>.json``, exchanges it for the profile's role credentials, and
+    refreshes the token when it can. ``aws sso login``, ``aws`` and terraform share that token, so after one login no
+    profile of the same sso-session asks for another approval.
+
+    If botocore can't use the cached token, because there is none, it expired and can't be refreshed, or AWS rejects
+    it (e.g. the SSO session ended), it raises an ``SSOError`` or ``TokenRetrievalError``. Then
+    :func:`~infrahouse_core.aws.sso_login.aws_sso_login` logs in and saves a new token. Any other error is raised as
+    it is, including a ``KeyError`` or ``TypeError`` from a corrupt token file.
+
+    The login uses the authorization-code flow with PKCE in the local browser, or the device flow when no browser on
+    this machine can finish that: in an SSH session, on Linux without a browser, or when the browser or the local
+    callback server can't start. ``use_device_code=True`` asks for the device flow, e.g. to approve on another device.
+
+    :param aws_config: AWS config with the profile's SSO settings.
+    :type aws_config: AWSConfig
+    :param aws_profile: AWS profile. If None, the ``default`` profile is used when it exists and no credentials are
+        set in the environment.
+    :type aws_profile: str
+    :param aws_region: Region for the session.
+    :type aws_region: str
+    :param use_device_code: If an SSO login is needed, use the device flow instead of the browser on this machine.
+    :type use_device_code: bool
+    :return: An authenticated AWS session.
+    :rtype: Session
+    :raise IHAWSException: If an SSO login is needed and fails.
     """
     if aws_profile is None and not _has_env_credentials() and "default" in aws_config.profiles:
         aws_profile = "default"
@@ -133,13 +149,13 @@ def get_aws_session(aws_config: AWSConfig, aws_profile: str, aws_region: str) ->
         response = get_aws_client("sts", aws_profile, aws_region).get_caller_identity()
         LOG.info("Connected to AWS as %s", response["Arn"])
 
-    except (SSOTokenLoadError, TokenRetrievalError) as err:
+    except (SSOError, TokenRetrievalError) as err:
         if not aws_profile:
             LOG.error("Try to run ih-aws with --aws-profile option.")
             LOG.error("Available profiles:\n\t%s", "\n\t".join(aws_config.profiles))
             sys.exit(1)
-        LOG.debug(err)
-        aws_session = aws_sso_login(aws_config, aws_profile, region=aws_region)
+        LOG.info("No usable SSO token for profile %s (%s). Logging in.", aws_profile, err)
+        aws_session = aws_sso_login(aws_config, aws_profile, region=aws_region, use_device_code=use_device_code)
         response = get_aws_client("sts", aws_profile, aws_region, session=aws_session).get_caller_identity()
         LOG.info("Connected to AWS as %s", response["Arn"])
         return aws_session
@@ -322,119 +338,6 @@ def get_secret(secretsmanager_client, secret_name: str) -> str:
     return secret_value
 
 
-def aws_sso_login(aws_config: AWSConfig, profile_name: str, region: Optional[str] = None) -> Session:
-    """
-    Login into AWS using SSO.
-
-    The profile's role credentials are cached as a JSON file in ``~/.infrahouse-toolkit`` (see
-    :class:`~infrahouse_core.aws.credentials_cache.CredentialsCache`). Until five minutes before they expire,
-    later calls for the same profile reuse them instead of asking for another SSO approval. A cache file that is
-    missing, corrupt or about to expire is replaced after a fresh SSO login.
-
-    Credit:
-    https://stackoverflow.com/questions/62311866/how-to-use-the-aws-python-sdk-while-connecting-via-sso-credentials
-
-    :param aws_config: AWS config with the profile's SSO settings.
-    :type aws_config: AWSConfig
-    :param profile_name: AWS profile to log in with.
-    :type profile_name: str
-    :param region: Region for the returned session. Defaults to the profile's region.
-    :type region: str
-    :return: A session authenticated with the profile's SSO role credentials.
-    :rtype: Session
-    :raise IHAWSException: If the SSO login fails or the user doesn't approve it in time.
-    :raise OSError: If the cache directory or file can't be written.
-    """
-    cache = CredentialsCache(_ROLE_CREDENTIALS_NAMESPACE)
-    credentials = cache.load(profile_name, required_keys=_ROLE_CREDENTIALS_KEYS)
-    if credentials is None:
-        credentials = _get_credentials(aws_config, profile_name)
-        # get_role_credentials() gives the expiration in milliseconds since the epoch.
-        cache.save(profile_name, credentials, expires_at=int(credentials["expiration"]) / 1000)
-
-    return Session(
-        region_name=region or aws_config.get_region(profile_name),
-        aws_access_key_id=credentials["accessKeyId"],
-        aws_secret_access_key=credentials["secretAccessKey"],
-        aws_session_token=credentials["sessionToken"],
-    )
-
-
-def _format_client_error(err: ClientError) -> str:
-    """Extract error code and message from a ClientError."""
-    error_info = err.response.get("Error", {})
-    code = error_info.get("Code", "Unknown")
-    message = error_info.get("Message", "No details provided")
-    return f"{code} - {message}"
-
-
-def _get_credentials(aws_config: AWSConfig, profile_name: str):
-    """
-    Login into AWS using SSO.
-
-    Credit:
-    https://stackoverflow.com/questions/62311866/how-to-use-the-aws-python-sdk-while-connecting-via-sso-credentials
-
-    :raise IHAWSException: If user didn't confirm auth or SSO configuration is invalid.
-    """
-
-    session = Session()
-    sso_oidc = session.client("sso-oidc", aws_config.get_sso_region(profile_name))
-
-    try:
-        client_creds = sso_oidc.register_client(
-            clientName="infrahouse-toolkit",
-            clientType="public",
-        )
-    except ClientError as err:
-        raise IHAWSException(
-            f"Failed to register SSO client for profile '{profile_name}': {_format_client_error(err)}"
-        ) from err
-
-    LOG.debug("client_creds = %s", pformat(client_creds, indent=4))
-
-    start_url = aws_config.get_start_url(profile_name)
-    LOG.debug("Using SSO start URL: %s", start_url)
-
-    try:
-        device_authorization = sso_oidc.start_device_authorization(
-            clientId=client_creds["clientId"],
-            clientSecret=client_creds["clientSecret"],
-            startUrl=start_url,
-        )
-    except ClientError as err:
-        raise IHAWSException(
-            f"Failed to start SSO device authorization for profile '{profile_name}': "
-            f"{_format_client_error(err)}. "
-            f"Check your SSO configuration (sso_start_url: {start_url})"
-        ) from err
-
-    LOG.debug("device_authorization = %s", pformat(device_authorization, indent=4))
-    device_code = device_authorization["deviceCode"]
-    expires_in = device_authorization["expiresIn"]
-    interval = device_authorization["interval"]
-    LOG.info("Verify user code: %s", device_authorization["userCode"])
-    webbrowser.open(device_authorization["verificationUriComplete"], autoraise=True)
-    for _ in range(1, expires_in // interval + 1):
-        sleep(interval)
-        try:
-            token = sso_oidc.create_token(
-                grantType="urn:ietf:params:oauth:grant-type:device_code",
-                deviceCode=device_code,
-                clientId=client_creds["clientId"],
-                clientSecret=client_creds["clientSecret"],
-            )
-            return session.client("sso", region_name=aws_config.get_sso_region(profile_name)).get_role_credentials(
-                roleName=aws_config.get_role(profile_name),
-                accountId=aws_config.get_account_id(profile_name),
-                accessToken=token["accessToken"],
-            )["roleCredentials"]
-        except sso_oidc.exceptions.AuthorizationPendingException:
-            pass
-
-    raise IHAWSException(f"The verification code isn't confirmed by user in {expires_in} seconds")
-
-
 # Re-export resource classes for convenient access via ``from infrahouse_core.aws import ...``.
 # These imports MUST stay at the bottom of the module to avoid circular-import errors
 # (several submodules do ``from infrahouse_core.aws import get_client``).
@@ -519,6 +422,7 @@ __all__ = [
     "IAMPolicy",
     "IAMRole",
     "IAMUser",
+    "IHAWSException",
     "InternetGateway",
     "KMSKey",
     "LambdaFunction",
