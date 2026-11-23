@@ -237,9 +237,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Can't run the checks: {err}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        # Both processes get Ctrl-C. The parent deletes the sandbox on its way out, and says so.
+        # Both processes get Ctrl-C. The parent has deleted or kept the sandbox on its way out, and says so.
         if _SANDBOX_VARIABLE not in os.environ:
-            print("Stopped. The sandbox is deleted.", file=sys.stderr)
+            print("Stopped." if args.keep_sandbox else "Stopped. The sandbox is deleted.", file=sys.stderr)
         return 130
 
 
@@ -325,15 +325,32 @@ def _run_in_sandbox(args: argparse.Namespace, argv: List[str]) -> int:
         return subprocess.run([sys.executable, str(Path(__file__).resolve()), *argv], env=env, check=False).returncode
     finally:
         if args.keep_sandbox:
-            print(
-                f"\nKept the sandbox at {sandbox}. It holds a live SSO token. To use it with the AWS CLI:\n\n"
-                f"    HOME={sandbox} AWS_CONFIG_FILE={aws_dir / 'config'} aws sts get-caller-identity --profile "
-                f"{args.profiles[0]}\n\n"
-                f"Delete it when you are done:\n\n    rm -rf {sandbox}\n",
-                file=sys.stderr,
-            )
+            _say_kept(sandbox, args.profiles[0])
         else:
             shutil.rmtree(sandbox, ignore_errors=True)
+
+
+def _say_kept(sandbox: Path, profile: str) -> None:
+    """
+    Say where the kept sandbox is, whether it holds an SSO token, and how to delete it.
+
+    The run may have stopped before the login saved a token: after Ctrl-C, or a setup error.
+
+    :param sandbox: The sandbox HOME.
+    :param profile: A profile to show in the example ``aws`` command.
+    """
+    cache_dir = sandbox / ".aws" / "sso" / "cache"
+    text = f"\nKept the sandbox at {sandbox}."
+    if cache_dir.is_dir() and any(cache_dir.glob("*.json")):
+        text += (
+            " It holds a live SSO token. To use it with the AWS CLI:\n\n"
+            f"    HOME={sandbox} AWS_CONFIG_FILE={sandbox / '.aws' / 'config'} aws sts get-caller-identity "
+            f"--profile {profile}\n\n"
+            "Delete it when you are done:"
+        )
+    else:
+        text += " It holds no SSO token. Delete it when you are done:"
+    print(f"{text}\n\n    rm -rf {sandbox}\n", file=sys.stderr)
 
 
 def _run_checks(args: argparse.Namespace, sandbox: Path, real_home: str) -> int:
