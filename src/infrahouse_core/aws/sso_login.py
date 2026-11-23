@@ -87,12 +87,13 @@ class _Login(NamedTuple):
 class _AuthCodeFlowUnavailable(Exception):
     """
     The PKCE flow can't run here, and nothing has been shown to the user yet. The device flow runs instead.
-
-    :param reason: Why, for the log.
-    :param browser_works: Whether the device flow may still open the verification URL in the local browser.
     """
 
-    def __init__(self, reason: str, browser_works: bool):
+    def __init__(self, reason: str, browser_works: bool) -> None:
+        """
+        :param reason: Why the PKCE flow can't run, for the log.
+        :param browser_works: Whether the device flow may still open the verification URL in the local browser.
+        """
         super().__init__(reason)
         self.reason = reason
         self.browser_works = browser_works
@@ -294,6 +295,7 @@ def _get_oidc_base_url(sso_oidc: Any) -> str:
     resolved: Dict[str, str] = {}
 
     def short_circuit(params: dict, **_: Any) -> tuple:
+        """Record the request's endpoint, and answer the request with an empty response instead of sending it."""
         url = urlsplit(params["url"])
         resolved["base_url"] = f"{url.scheme}://{url.netloc}"
         # A response tuple from a before-call handler takes the place of the request.
@@ -317,6 +319,11 @@ class _CallbackServer(HTTPServer):
     """
 
     def __init__(self) -> None:
+        """
+        Bind to 127.0.0.1 on a free port.
+
+        :raise OSError: If the socket can't be bound.
+        """
         self.expected_state = ""
         self.deadline = monotonic() + _AUTH_CODE_TIMEOUT
         self.done = False
@@ -325,7 +332,11 @@ class _CallbackServer(HTTPServer):
         super().__init__((_CALLBACK_HOST, 0), _CallbackHandler)
 
     def handle_error(self, request: Any, client_address: Any) -> None:
-        # The default prints a traceback to stderr, e.g. when the browser disconnects before reading the page.
+        """
+        Log a failed request at debug.
+
+        The default prints a traceback to stderr, e.g. when the browser disconnects before reading the page.
+        """
         LOG.debug("An OAuth callback request from %s failed", client_address, exc_info=True)
 
     def set_code(self, code: str) -> None:
@@ -376,6 +387,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
     server: _CallbackServer
 
     def __init__(self, request: Any, client_address: Any, server: _CallbackServer) -> None:
+        """Handle one connection; the base class does it all from its constructor."""
         self._cut_off_lock = threading.Lock()
         self._finished = False
         self._cut_off = False
@@ -383,6 +395,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         super().__init__(request, client_address, server)
 
     def setup(self) -> None:
+        """Limit the connection's reads, and start the timer that cuts it off when its time is up."""
         time_allowed = max(0.0, min(_CALLBACK_REQUEST_TIMEOUT, self.server.deadline - monotonic()))
         # StreamRequestHandler.setup() applies this to the socket.
         self.timeout = max(_MIN_READ_TIMEOUT, time_allowed)
@@ -392,6 +405,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         self._cut_off_timer.start()
 
     def handle(self) -> None:
+        """Handle the request, and treat a failed read or write on a connection that was cut off as expected."""
         try:
             super().handle()
         except OSError:
@@ -402,6 +416,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             LOG.debug("Closed an OAuth callback connection that took too long")
 
     def finish(self) -> None:
+        """Stop the cut-off timer and close the connection."""
         with self._cut_off_lock:
             self._finished = True
         if self._cut_off_timer is not None:
@@ -435,12 +450,18 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             self._send_text(400, "The request has neither an authorization code nor an error.")
 
     def log_message(self, format: str, *args: Any) -> None:  # pylint: disable=redefined-builtin
-        # The default writes every request line to stderr, and the callback's request line holds the authorization
-        # code.
-        pass
+        """
+        Log nothing.
+
+        The default writes every request line to stderr, and the callback's request line holds the authorization code.
+        """
 
     def _cut_off_connection(self) -> None:
-        # Runs on the timer's thread. Shutting the socket down ends a read or write that is blocked on it.
+        """
+        Shut the connection down, unless the request is already finished.
+
+        Runs on the timer's thread. Shutting the socket down ends a read or write that is blocked on it.
+        """
         with self._cut_off_lock:
             if self._finished:
                 return
@@ -451,6 +472,12 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 pass
 
     def _send_text(self, status: int, text: str) -> None:
+        """
+        Answer the request with a short plain-text page.
+
+        :param status: The HTTP status code.
+        :param text: The page's text.
+        """
         LOG.debug("Answered an OAuth callback request with HTTP %d", status)
         body = f"{text}\n".encode("utf-8")
         self.send_response(status)
@@ -599,9 +626,16 @@ def _dump_sso_token(token: dict) -> str:
 
 
 def _utc_timestamp(value: Any) -> str:
+    """
+    Serialise a datetime for :func:`json.dumps`, as UTC ``YYYY-MM-DDTHH:MM:SSZ``.
+
+    :param value: A value that :func:`json.dumps` can't serialise itself.
+    :return: The datetime as a string.
+    :raise TypeError: If the value isn't a datetime. Every token value is a str or a datetime, so this doesn't happen.
+        If it did, botocore's ``JSONFileCache`` would turn it into a ``ValueError`` that shows the whole token.
+    """
     if isinstance(value, datetime):
         return value.astimezone(timezone.utc).strftime(_UTC_FORMAT)
-    # The message names the type only: the value might be a secret.
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
