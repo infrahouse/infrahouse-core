@@ -383,6 +383,7 @@ def _run_checks(args: argparse.Namespace, sandbox: Path, real_home: str) -> int:
     guard = _LoginGuard(ih_aws.aws_sso_login)
     with (
         mock.patch.object(ih_aws, "aws_sso_login", guard),
+        mock.patch.object(webbrowser, "get", _with_home(webbrowser.get, real_home)),
         mock.patch.object(webbrowser, "open", _with_home(webbrowser.open, real_home)),
     ):
         if not _check_login(report, args, config, profiles[0], regions[profiles[0]], guard, flows):
@@ -474,26 +475,28 @@ def _sso_role_name(config: AWSConfig, profile: str) -> Optional[str]:
         return None
 
 
-def _with_home(open_url: Callable[..., bool], home: str) -> Callable[..., bool]:
+def _with_home(function: Callable[..., Any], home: str) -> Callable[..., Any]:
     """
-    Wrap ``webbrowser.open`` so that the browser starts with the user's own HOME, not the sandbox's.
+    Wrap a ``webbrowser`` function so that it runs with the user's own HOME, not the sandbox's.
 
-    On Linux, a browser started with the sandbox HOME would not find the user's profile.
+    On Linux both matter. The first ``webbrowser.get()``, which the login calls before it opens anything, runs
+    ``xdg-settings get default-web-browser`` to decide which browser comes first, and that reads the user's
+    ``~/.config``. A browser started by ``webbrowser.open()`` with the sandbox HOME would not find the user's profile.
 
-    :param open_url: The real ``webbrowser.open``.
+    :param function: ``webbrowser.get`` or ``webbrowser.open``.
     :param home: The user's own HOME.
     :return: The wrapper.
     """
 
-    def open_with_home(url: str, *args: Any, **kwargs: Any) -> bool:
+    def with_home(*args: Any, **kwargs: Any) -> Any:
         sandbox_home = os.environ["HOME"]
         os.environ["HOME"] = home
         try:
-            return open_url(url, *args, **kwargs)
+            return function(*args, **kwargs)
         finally:
             os.environ["HOME"] = sandbox_home
 
-    return open_with_home
+    return with_home
 
 
 def _check_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments
