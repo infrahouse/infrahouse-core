@@ -72,6 +72,7 @@ GitHub Integration
 * **GitHubActions** - Manage self-hosted GitHub Actions runners
 * **GitHubActionsRunner** - Query runner status, labels, and metadata
 * Token generation from GitHub App credentials stored in AWS Secrets Manager
+* GitHub REST API calls retry dropped connections, 429 and 5xx responses with exponential backoff
 
 Orchestrator
 ~~~~~~~~~~~~~

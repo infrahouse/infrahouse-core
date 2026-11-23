@@ -29,11 +29,11 @@ def github_auth():
 
 @pytest.fixture
 def runner(github_auth, mock_runner_data):
-    with mock.patch("src.infrahouse_core.github.get") as mock_get:
+    with mock.patch("src.infrahouse_core.github._get_session") as mock_get_session:
         mock_response = mock.Mock()
         mock_response.json.return_value = mock_runner_data
         mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+        mock_get_session.return_value.get.return_value = mock_response
         yield GitHubActionsRunner(252, github_auth)
 
 
@@ -63,10 +63,10 @@ def test_runner_refresh(runner, mock_runner_data):
 
 
 def test_runner_http_error(github_auth):
-    with mock.patch("requests.get") as mock_get:
+    with mock.patch("src.infrahouse_core.github._get_session") as mock_get_session:
         mock_response = mock.Mock()
         mock_response.raise_for_status.side_effect = HTTPError("API Error")
-        mock_get.return_value = mock_response
+        mock_get_session.return_value.get.return_value = mock_response
 
         with pytest.raises(HTTPError):
             runner = GitHubActionsRunner(252, github_auth)
@@ -86,11 +86,11 @@ def test_runner_no_instance_id(github_auth):
         ],
     }
 
-    with mock.patch("src.infrahouse_core.github.get") as mock_get:
+    with mock.patch("src.infrahouse_core.github._get_session") as mock_get_session:
         mock_response = mock.Mock()
         mock_response.json.return_value = mock_data
         mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+        mock_get_session.return_value.get.return_value = mock_response
 
         runner = GitHubActionsRunner(252, github_auth)
         assert runner.instance_id is None

@@ -47,6 +47,7 @@ dependencies = [
     "cryptography >= 48.0.1",
     "ec2-metadata ~= 2.13",
     "PyGithub ~= 2.4",
+    "requests ~= 2.32",
 ]
 
 [project.optional-dependencies]
