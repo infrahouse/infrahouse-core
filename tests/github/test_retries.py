@@ -2,18 +2,19 @@
 Tests for retries of GitHub REST API calls (https://github.com/infrahouse/infrahouse-core/issues/23).
 
 These tests run the real requests and urllib3 retry code against a local HTTP server. The failure in the issue
-is a connection that GitHub closed without a response, which a mock of ``Session.get`` can't reproduce.
+is a connection that GitHub closed without a response, which a mock of the session can't reproduce.
 """
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Dict, Iterator, List, Optional, Tuple
 from unittest import mock
 
 import pytest
 from requests import ConnectionError as RequestsConnectionError
-from requests import HTTPError
+from requests import HTTPError, ReadTimeout
 
 from infrahouse_core import github
 from infrahouse_core.github import GitHubActions, GitHubActionsRunner, GitHubAuth
@@ -43,6 +44,20 @@ def drop() -> Action:
     """
 
     def action(handler: BaseHTTPRequestHandler) -> None:
+        handler.close_connection = True
+
+    return action
+
+
+def stall(seconds: float) -> Action:
+    """
+    Read the request, wait ``seconds`` without answering, then close the connection.
+
+    A client whose read timeout is shorter than ``seconds`` times out waiting for the response.
+    """
+
+    def action(handler: BaseHTTPRequestHandler) -> None:
+        time.sleep(seconds)
         handler.close_connection = True
 
     return action
@@ -122,7 +137,7 @@ def fake_github() -> Iterator[FakeGitHub]:
     github._get_session.cache_clear()
     try:
         with (
-            mock.patch.object(github, "GITHUB_API_URL", server.base_url),
+            mock.patch.object(github, "_GITHUB_API_URL", server.base_url),
             mock.patch.object(github, "_RETRY_BACKOFF_FACTOR", 0),
         ):
             yield server
@@ -136,6 +151,25 @@ def fake_github() -> Iterator[FakeGitHub]:
 @pytest.fixture
 def gha() -> GitHubActions:
     return GitHubActions(GitHubAuth("test-token", ORG))
+
+
+# The two kinds of transient failure: urllib3 retries a dropped connection on its read-error path and a 503 on its
+# status path.
+TRANSIENT_FAILURES = [
+    pytest.param(drop(), id="dropped-connection"),
+    pytest.param(respond(503), id="503"),
+]
+
+
+def _wait_for_requests(server: FakeGitHub, count: int) -> None:
+    """
+    Wait up to 2 seconds for the server to record ``count`` requests.
+
+    A client that times out can give up before the server thread has recorded the request it sent.
+    """
+    deadline = time.monotonic() + 2
+    while len(server.requests) < count and time.monotonic() < deadline:
+        time.sleep(0.01)
 
 
 def test_runners_retried_after_dropped_connection(fake_github, gha):
@@ -155,13 +189,25 @@ def test_runners_retried_after_503(fake_github, gha):
     assert fake_github.requests == [("GET", RUNNERS_PATH)] * 2
 
 
-def test_429_with_retry_after_is_retried(fake_github, gha):
+def test_429_without_retry_after_is_retried(fake_github, gha):
+    """429 is retried because it is in the status forcelist, not only because of a Retry-After header."""
+    fake_github.script(respond(429, {"message": "rate limited"}), respond(200, {"runners": [_runner(1)]}))
+
+    assert [r.runner_id for r in gha.runners] == [1]
+    assert fake_github.requests == [("GET", RUNNERS_PATH)] * 2
+
+
+def test_429_retry_after_header_is_honoured(fake_github, gha):
+    """The retry waits as long as Retry-After says. The backoff is zero in these tests, so only Retry-After sleeps."""
     fake_github.script(
-        respond(429, {"message": "secondary rate limit"}, headers={"Retry-After": "0"}),
+        respond(429, {"message": "secondary rate limit"}, headers={"Retry-After": "3"}),
         respond(200, {"runners": [_runner(1)]}),
     )
 
-    assert [r.runner_id for r in gha.runners] == [1]
+    with mock.patch("urllib3.util.retry.time.sleep") as sleep:
+        assert [r.runner_id for r in gha.runners] == [1]
+
+    sleep.assert_called_once_with(3)
     assert fake_github.requests == [("GET", RUNNERS_PATH)] * 2
 
 
@@ -183,6 +229,22 @@ def test_gives_up_on_persistent_dropped_connection(fake_github, gha):
     with pytest.raises(RequestsConnectionError):
         list(gha.runners)
 
+    assert len(fake_github.requests) == github._RETRY_TOTAL + 1
+
+
+def test_gives_up_on_persistent_read_timeout(fake_github):
+    """
+    After the last retry a read timeout reaches the caller as requests.ReadTimeout, as it did without retries.
+
+    requests itself would report it as ConnectionError, which ``except requests.Timeout`` doesn't catch.
+    """
+    fake_github.default_action = stall(0.3)
+
+    with pytest.raises(ReadTimeout) as err:
+        github._request("GET", f"{fake_github.base_url}{RUNNERS_PATH}", headers={}, timeout=0.05)
+
+    assert not isinstance(err.value, RequestsConnectionError)
+    _wait_for_requests(fake_github, github._RETRY_TOTAL + 1)
     assert len(fake_github.requests) == github._RETRY_TOTAL + 1
 
 
@@ -220,8 +282,9 @@ def test_pagination_retries_failed_page(fake_github, gha):
     ]
 
 
-def test_deregister_runner_retried_after_503(fake_github, gha):
-    fake_github.script(respond(503), respond(204))
+@pytest.mark.parametrize("failure", TRANSIENT_FAILURES)
+def test_deregister_runner_retried(fake_github, gha, failure):
+    fake_github.script(failure, respond(204))
     runner = GitHubActionsRunner(7, gha._github, runner_data=_runner(7))
 
     gha.deregister_runner(runner)
@@ -229,8 +292,24 @@ def test_deregister_runner_retried_after_503(fake_github, gha):
     assert fake_github.requests == [("DELETE", f"{RUNNERS_PATH}/7")] * 2
 
 
-def test_registration_token_retried_after_503(fake_github, gha):
-    fake_github.script(respond(503), respond(201, {"token": "reg-token", "expires_at": "2026-11-23T20:00:00Z"}))
+def test_deregister_runner_404_after_lost_response(fake_github, gha):
+    """
+    GitHub deleted the runner but the response was lost. The retry gets 404, and deregister_runner() raises
+    HTTPError, as its docstring says. This pins the contract the PR keeps (decision 3).
+    """
+    fake_github.script(drop(), respond(404, {"message": "Not Found"}))
+    runner = GitHubActionsRunner(7, gha._github, runner_data=_runner(7))
+
+    with pytest.raises(HTTPError) as err:
+        gha.deregister_runner(runner)
+
+    assert err.value.response.status_code == 404
+    assert fake_github.requests == [("DELETE", f"{RUNNERS_PATH}/7")] * 2
+
+
+@pytest.mark.parametrize("failure", TRANSIENT_FAILURES)
+def test_registration_token_retried(fake_github, gha, failure):
+    fake_github.script(failure, respond(201, {"token": "reg-token", "expires_at": "2026-11-23T20:00:00Z"}))
 
     assert gha.registration_token == "reg-token"
     assert fake_github.requests == [("POST", f"{RUNNERS_PATH}/registration-token")] * 2

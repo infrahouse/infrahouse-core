@@ -8,30 +8,31 @@ connections, connection errors, read timeouts, and responses with status
 backoff sleeps of 0, 1, 2, 4 and 8 seconds between attempts, or as long
 as GitHub's ``Retry-After`` header says. urllib3 logs each retry at
 WARNING on the ``urllib3`` logger. When the retries run out, the caller
-gets :class:`requests.HTTPError` for an HTTP error status and
-:class:`requests.ConnectionError` for a network error. A read timeout
-that runs out of retries is reported as :class:`requests.ConnectionError`
-too, not as :class:`requests.ReadTimeout`.
+gets the same exception as without retries: :class:`requests.HTTPError`
+for an HTTP error status, :class:`requests.ReadTimeout` for a read
+timeout, and :class:`requests.ConnectionError` for other network errors.
 """
 
 from dataclasses import dataclass
 from functools import cache
 from logging import getLogger
 from typing import Iterator, List, Optional
-from urllib.parse import urlparse
 
 from cached_property import cached_property_with_ttl
 from github import GithubIntegration
 from github.Consts import MAX_JWT_EXPIRY
-from requests import HTTPError, Session
+from requests import ConnectionError as RequestsConnectionError
+from requests import HTTPError, ReadTimeout, Response, Session
 from requests.adapters import HTTPAdapter
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from urllib3.util import Retry
 
 from infrahouse_core.aws.secretsmanager import Secret
 
 LOG = getLogger(__name__)
 
-GITHUB_API_URL = "https://api.github.com"
+# Private so that it isn't API. Tests point it at a local plain-HTTP server; see _get_session().
+_GITHUB_API_URL = "https://api.github.com"
 
 # Retry policy for the GitHub REST API calls in this module. See _get_session().
 # With urllib3 2.x, a backoff factor of 0.5 sleeps 0, 1, 2, 4 and 8 seconds between the six attempts.
@@ -180,8 +181,9 @@ class GitHubActionsRunner:
         """
         if self.__runner_data is None:
             try:
-                response = _get_session().get(
-                    f"{GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/{self._runner_id}",
+                response = _request(
+                    "GET",
+                    f"{_GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/{self._runner_id}",
                     headers=self._github_headers,
                     timeout=5,
                 )
@@ -249,8 +251,9 @@ class GitHubActions:
         :return: A registration token string.
         :rtype: str
         """
-        response = _get_session().post(
-            f"{GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/registration-token",
+        response = _request(
+            "POST",
+            f"{_GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/registration-token",
             headers=self._github_headers,
             timeout=30,
         )
@@ -299,8 +302,9 @@ class GitHubActions:
         :raises requests.HTTPError: If the GitHub API returns a non-2xx status
             (for example, 404 if the runner was already removed).
         """
-        response = _get_session().delete(
-            f"{GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/{runner.runner_id}",
+        response = _request(
+            "DELETE",
+            f"{_GITHUB_API_URL}/orgs/{self._github.org}/actions/runners/{runner.runner_id}",
             headers=self._github_headers,
             timeout=30,
         )
@@ -371,10 +375,10 @@ class GitHubActions:
         :rtype: Iterator[dict]
         :raises ValueError: If a paginated response is missing the ``runners`` key.
         """
-        url = f"{GITHUB_API_URL}/orgs/{self._github.org}/actions/runners"
+        url = f"{_GITHUB_API_URL}/orgs/{self._github.org}/actions/runners"
         while url:
             # Each page is its own request with its own retries, so a retried page is still yielded once.
-            response = _get_session().get(url, headers=self._github_headers, timeout=10)
+            response = _request("GET", url, headers=self._github_headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             runners_page = data.get("runners")
@@ -471,13 +475,13 @@ def _get_org_name(github_client: GithubIntegration, installation_id: int) -> str
     :rtype: str
     :raises requests.HTTPError: If the GitHub API returns a non-2xx status.
     """
-    url = f"{GITHUB_API_URL}/app/installations/{installation_id}"
+    url = f"{_GITHUB_API_URL}/app/installations/{installation_id}"
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {github_client.create_jwt()}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    response = _get_session().get(url, headers=headers, timeout=30)
+    response = _request("GET", url, headers=headers, timeout=30)
     response.raise_for_status()
     return response.json()["account"]["login"]
 
@@ -502,8 +506,12 @@ def _get_session() -> Session:
     The ``timeout`` that each caller passes applies to every attempt, not to
     the call as a whole.
 
-    The retrying adapter is mounted for the scheme of ``GITHUB_API_URL``, so
-    tests can point ``GITHUB_API_URL`` at a plain ``http://`` server.
+    The retrying adapter is mounted for both ``https://`` and ``http://``.
+    The GitHub API is HTTPS only; ``http://`` lets tests point
+    ``_GITHUB_API_URL`` at a local plain-HTTP server.
+
+    Call the API through :func:`_request`, not through this session directly,
+    so that exhausted read timeouts are reported as ``ReadTimeout``.
 
     :return: A session with a retrying adapter mounted.
     :rtype: requests.Session
@@ -519,6 +527,40 @@ def _get_session() -> Session:
         respect_retry_after_header=True,
         raise_on_status=False,
     )
+    adapter = HTTPAdapter(max_retries=retry)
     session = Session()
-    session.mount(f"{urlparse(GITHUB_API_URL).scheme}://", HTTPAdapter(max_retries=retry))
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
     return session
+
+
+def _request(method: str, url: str, headers: dict, timeout: float) -> Response:
+    """
+    Send one GitHub REST API request through the retrying session.
+
+    When a read timeout exhausts the retries, requests reports it as
+    :class:`requests.ConnectionError`. Without retries the same failure is
+    :class:`requests.ReadTimeout`, which is a :class:`requests.Timeout` and
+    not a ``ConnectionError``. This function re-raises it as ``ReadTimeout``
+    so that callers catching ``requests.Timeout`` keep working.
+
+    :param method: HTTP method, for example ``"GET"``.
+    :type method: str
+    :param url: The full request URL.
+    :type url: str
+    :param headers: Request headers, including the authorization header.
+    :type headers: dict
+    :param timeout: Connect and read timeout in seconds, applied to every attempt.
+    :type timeout: float
+    :return: The response. An HTTP error status is returned, not raised.
+    :rtype: requests.Response
+    :raises requests.ReadTimeout: If every attempt timed out reading the response.
+    :raises requests.ConnectionError: If a network error persisted through the retries.
+    """
+    try:
+        return _get_session().request(method, url, headers=headers, timeout=timeout)
+    except RequestsConnectionError as err:
+        cause = err.args[0] if err.args else None
+        if isinstance(cause, MaxRetryError) and isinstance(cause.reason, ReadTimeoutError):
+            raise ReadTimeout(cause, request=err.request) from err
+        raise

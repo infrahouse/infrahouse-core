@@ -28,12 +28,12 @@ def _runner(runner_id, label_names):
     }
 
 
-def _patch_session_get(**get_kwargs):
+def _patch_session_request(**request_kwargs):
     """
-    Patch the module's HTTP session so that ``session.get`` is a mock built from ``get_kwargs``.
+    Patch the module's HTTP session so that ``session.request`` is a mock built from ``request_kwargs``.
     """
     session = mock.Mock()
-    session.get = mock.Mock(**get_kwargs)
+    session.request = mock.Mock(**request_kwargs)
     return mock.patch("infrahouse_core.github._get_session", return_value=session)
 
 
@@ -62,15 +62,16 @@ def paginated_get():
     page_urls = [BASE_URL] + [f"https://api.github.com/p{i}" for i in range(1, len(pages))]
     state = {"fetched": 0}
 
-    def side_effect(url, headers=None, timeout=None):
+    def side_effect(method, url, headers=None, timeout=None):
         state["fetched"] += 1
+        assert method == "GET"
         if url not in page_urls:
             pytest.fail(f"Unexpected URL requested by _get_github_runners: {url!r}")
         idx = page_urls.index(url)
         next_url = page_urls[idx + 1] if idx + 1 < len(pages) else None
         return _make_response(pages[idx], next_url)
 
-    with _patch_session_get(side_effect=side_effect):
+    with _patch_session_request(side_effect=side_effect):
         yield state, pages
 
 
@@ -145,7 +146,7 @@ def test_get_github_runners_raises_on_missing_runners_key():
     bogus.links = {}
     bogus.raise_for_status.return_value = None
 
-    with _patch_session_get(return_value=bogus):
+    with _patch_session_request(return_value=bogus):
         gha = GitHubActions(GitHubAuth("test-token", ORG))
         with pytest.raises(ValueError, match="'runners' key missing"):
             list(gha.runners)
@@ -163,7 +164,7 @@ def test_http_error_on_second_page_raises():
 
     responses = iter([page1, page2])
 
-    with _patch_session_get(side_effect=lambda *a, **kw: next(responses)):
+    with _patch_session_request(side_effect=lambda *a, **kw: next(responses)):
         gha = GitHubActions(GitHubAuth("test-token", ORG))
         gen = iter(gha.runners)
 
@@ -184,7 +185,7 @@ def test_get_github_runners_empty_org():
     empty.links = {}
     empty.raise_for_status.return_value = None
 
-    with _patch_session_get(return_value=empty):
+    with _patch_session_request(return_value=empty):
         gha = GitHubActions(GitHubAuth("test-token", ORG))
         assert list(gha.runners) == []
         assert gha.find_runner_by_label("anything") is None
