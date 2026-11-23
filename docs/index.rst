@@ -11,6 +11,7 @@ Welcome to InfraHouse Core's documentation!
    architecture
    migration
    modules
+   manual_testing
    contributing
    authors
    history
