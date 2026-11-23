@@ -111,7 +111,8 @@ When reviewing Python code, you will:
 
 9. **Performance & Resource Management**:
     - Check for efficient use of boto3 clients (avoid recreation)
-    - Verify proper use of caching (`CredentialsCache` JSON files for SSO credentials; never pickle or shelve)
+    - Verify proper use of caching (SSO tokens go to the shared `~/.aws/sso/cache` through botocore's
+      `SSOTokenLoader` and `JSONFileCache`; no role credentials on disk; never pickle or shelve)
     - Ensure no unnecessary API calls
     - Check for proper resource cleanup (clients, sessions, file handles)
     - Validate memory efficiency (avoid loading large datasets into memory)

@@ -124,14 +124,6 @@ infrahouse\_core.aws.config module
    :undoc-members:
    :show-inheritance:
 
-infrahouse\_core.aws.credentials\_cache module
-----------------------------------------------
-
-.. automodule:: infrahouse_core.aws.credentials_cache
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 infrahouse\_core.aws.dynamodb module
 ------------------------------------
 
@@ -336,6 +328,14 @@ infrahouse\_core.aws.sqs\_queue module
 --------------------------------------
 
 .. automodule:: infrahouse_core.aws.sqs_queue
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+infrahouse\_core.aws.sso\_login module
+--------------------------------------
+
+.. automodule:: infrahouse_core.aws.sso_login
    :members:
    :undoc-members:
    :show-inheritance:

@@ -4,6 +4,7 @@ Module for AWSConfig class.
 
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from os import path as osp
+from typing import List
 
 
 class AWSConfig:
@@ -122,7 +123,7 @@ class AWSConfig:
         :rtype: str or None
         """
         try:
-            sso_session = self.config_parser.get(self._get_section(profile_name), "sso_session")
+            sso_session = self.get_sso_session(profile_name)
         except NoOptionError:
             return self.config_parser.get("default", "region") if "default" in self.config_parser.sections() else None
 
@@ -133,6 +134,44 @@ class AWSConfig:
             return self.config_parser.get(f"sso-session {sso_session}", "sso_region")
         except NoOptionError:
             return self.config_parser.get("default", "region")
+
+    def get_sso_registration_scopes(self, profile_name: str) -> List[str]:
+        """
+        Read the registration scopes of the profile's SSO session.
+
+        Looks up the ``sso_session`` for the profile, then reads ``sso_registration_scopes`` from that session's
+        config section. The value is split on commas, and each scope is stripped of surrounding whitespace; empty
+        items are dropped. This is how the AWS CLI parses it (``parse_sso_registration_scopes``).
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: The scopes, e.g. ``["sso:account:access"]``. An empty list if ``sso_registration_scopes``
+            is not set.
+        :rtype: list
+        :raises NoSectionError: If the profile or its SSO session section doesn't exist.
+        :raises NoOptionError: If ``sso_session`` is not configured for the profile.
+        """
+        sso_session = self.get_sso_session(profile_name)
+        try:
+            raw_scopes = self.config_parser.get(f"sso-session {sso_session}", "sso_registration_scopes")
+        except NoOptionError:
+            return []
+        return [scope.strip() for scope in raw_scopes.split(",") if scope.strip()]
+
+    def get_sso_session(self, profile_name: str) -> str:
+        """
+        Read the name of the SSO session that a profile uses.
+
+        botocore names the profile's cached SSO token after this name: ``~/.aws/sso/cache/<sha1 of it>.json``.
+
+        :param profile_name: AWS profile name.
+        :type profile_name: str
+        :return: The profile's ``sso_session`` value.
+        :rtype: str
+        :raises NoSectionError: If the profile doesn't exist in config.
+        :raises NoOptionError: If ``sso_session`` is not configured for the profile.
+        """
+        return self.config_parser.get(self._get_section(profile_name), "sso_session")
 
     def get_role(self, profile_name: str) -> str:
         """
@@ -161,8 +200,7 @@ class AWSConfig:
         :raises NoSectionError: If profile or SSO session section doesn't exist.
         :raises NoOptionError: If ``sso_session`` or ``sso_start_url`` is not configured.
         """
-        sso_session = self.config_parser.get(self._get_section(profile_name), "sso_session")
-        return self.config_parser.get(f"sso-session {sso_session}", "sso_start_url")
+        return self.config_parser.get(f"sso-session {self.get_sso_session(profile_name)}", "sso_start_url")
 
     @staticmethod
     def _get_section(profile_name):
