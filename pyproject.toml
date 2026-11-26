@@ -46,7 +46,7 @@ dependencies = [
     # Use a floor only so every consumer inherits the fix without an upper cap.
     "cryptography >= 48.0.1",
     "ec2-metadata ~= 2.13",
-    "PyGithub ~= 2.4",
+    "PyGithub ~= 2.6",
     "requests ~= 2.32",
 ]
 

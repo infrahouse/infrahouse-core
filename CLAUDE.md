@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## First Steps
+
+**Your first tool call in this repository MUST be reading .claude/CODING_STANDARD.md.
+Do not read any other files, search, or take any actions until you have read it.**
+This contains InfraHouse's comprehensive coding standards for Terraform, Python, and general formatting rules.
+
 ## Project Overview
 
 InfraHouse Core is a lightweight Python library providing AWS and general-purpose utility classes. It's published on PyPI as `infrahouse-core`.
@@ -52,7 +58,10 @@ The library is organized into two main areas under `src/infrahouse_core/`:
 - `config.py` - AWS config file parsing
 
 ### General Utilities
-- `github.py` - GitHub Actions self-hosted runner management via GitHub API, integrates with AWS Secrets Manager for token storage
+- `github.py` - GitHub Actions self-hosted runner management via GitHub API, integrates with AWS Secrets Manager for
+  token storage. GitHub App installation tokens come from a `GitHubTokenSource`: `GitHubAppTokenSource` signs the
+  App JWT with a `JWTSigner`, either `KMSSigner` (`kms:Sign`, the key stays in KMS) or `PEMSecretSigner` (PEM in
+  Secrets Manager). `get_tmp_token()` is the PEM-signed source behind the original signature
 - `logging.py` - Logging setup with stdout/stderr splitting by log level
 - `timeout.py` - Timeout context manager
 - `fs.py` - Filesystem utilities

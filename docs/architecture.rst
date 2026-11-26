@@ -8,7 +8,7 @@ Module Overview
 InfraHouse Core is organized into two main areas:
 
 - **aws** -- AWS service wrappers with consistent session, credential, and role-assumption handling.
-- **github** -- GitHub Actions runner management via the GitHub API.
+- **github** -- GitHub Actions runner management via the GitHub API, and GitHub App installation tokens.
 
 Supporting modules provide logging, timeouts, filesystem helpers, and input validation.
 

@@ -11,22 +11,37 @@ WARNING on the ``urllib3`` logger. When the retries run out, the caller
 gets the same exception as without retries: :class:`requests.HTTPError`
 for an HTTP error status, :class:`requests.ReadTimeout` for a read
 timeout, and :class:`requests.ConnectionError` for other network errors.
+Two calls don't use that session: :class:`GitHubAppTokenSource` lists the
+App's installations and exchanges the JWT for a token through PyGithub,
+which has its own connection.
+
+GitHub App installation tokens come from a :class:`GitHubTokenSource`.
+:class:`GitHubAppTokenSource` mints them as the App, with the App JWT
+signed by a :class:`JWTSigner`: :class:`KMSSigner` signs with ``kms:Sign``
+and a key that never leaves KMS, :class:`PEMSecretSigner` signs with a
+PEM key read from AWS Secrets Manager. :func:`get_tmp_token` is the
+PEM-signed source behind the original function signature.
 """
 
+import base64
+import json
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cache
 from logging import getLogger
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 from cached_property import cached_property_with_ttl
 from github import GithubIntegration
-from github.Consts import MAX_JWT_EXPIRY
+from github.Auth import AppAuth
+from github.Consts import DEFAULT_JWT_ALGORITHM, MAX_JWT_EXPIRY
 from requests import ConnectionError as RequestsConnectionError
 from requests import HTTPError, ReadTimeout, Response, Session
 from requests.adapters import HTTPAdapter
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from urllib3.util import Retry
 
+from infrahouse_core.aws import get_client
 from infrahouse_core.aws.secretsmanager import Secret
 
 LOG = getLogger(__name__)
@@ -44,6 +59,12 @@ _RETRY_STATUS_FORCELIST = (429, 500, 502, 503, 504)
 # token, and GitHub expires unused tokens. Any POST added to this module later is retried too, so make
 # sure repeating it is harmless.
 _RETRY_ALLOWED_METHODS = frozenset({"GET", "DELETE", "POST"})
+
+# The JOSE header of the App JWTs that KMSSigner signs. GitHub accepts only RS256.
+_JWT_HEADER = {"alg": "RS256", "typ": "JWT"}
+# The kms:Sign algorithm that makes an RS256 signature: RSASSA-PKCS1-v1_5 with SHA-256. With MessageType RAW,
+# KMS hashes the message itself.
+_KMS_SIGNING_ALGORITHM = "RSASSA_PKCS1_V1_5_SHA_256"
 
 
 @dataclass
@@ -422,6 +443,267 @@ class GitHubActions:
         secret.ensure_absent(force=True)
 
 
+class JWTSigner(ABC):  # pylint: disable=too-few-public-methods
+    """
+    Signs the JWT that a GitHub App authenticates with.
+
+    :class:`GitHubAppTokenSource` calls :meth:`sign` once for every request it
+    makes as the App, with the claims that :class:`github.Auth.AppAuth` builds.
+    An implementation must not log its key, the JWT or the signature.
+    """
+
+    @abstractmethod
+    def sign(self, payload: dict) -> str:
+        """
+        Sign a JWT payload with RS256.
+
+        :param payload: The JWT claims: ``iat``, ``exp`` and ``iss``.
+        :type payload: dict
+        :return: The signed JWT in compact form, ``header.payload.signature``.
+        :rtype: str
+        """
+
+
+class PEMSecretSigner(JWTSigner):  # pylint: disable=too-few-public-methods
+    """
+    Signs GitHub App JWTs with the App's private key, read from AWS Secrets Manager.
+
+    This is how :func:`get_tmp_token` signs. Anyone who can read the secret can
+    copy the key and sign as the App. :class:`KMSSigner` keeps the key in KMS
+    instead.
+
+    The secret is read on the first :meth:`sign` call. The key is then kept in
+    memory for the life of the signer, so a change to the secret takes effect
+    in a new signer.
+
+    :param pem_key_secret: Name or ARN of the secret that holds the App's private key in PEM format.
+    :type pem_key_secret: str
+    :param region: AWS region of the secret. If omitted, uses the default region.
+    :type region: str
+    :param role_arn: IAM role ARN to assume for cross-account access.
+    :type role_arn: str
+    :param session: boto3 session to create the Secrets Manager client from, instead of ``role_arn``.
+    :type session: boto3.Session
+    """
+
+    def __init__(self, pem_key_secret: str, region: str = None, role_arn: str = None, session=None):
+        self._secret = Secret(pem_key_secret, region=region, role_arn=role_arn, session=session)
+        self.__private_key = None
+        # PyGithub's own signer, the one GithubIntegration(app_id, private_key) used before. It calls
+        # _read_private_key() for every signature.
+        self._sign_func = AppAuth.create_jwt_sign(self._read_private_key, DEFAULT_JWT_ALGORITHM)
+
+    def sign(self, payload: dict) -> str:
+        """
+        Sign a JWT payload with RS256 and the App's private key.
+
+        :param payload: The JWT claims: ``iat``, ``exp`` and ``iss``.
+        :type payload: dict
+        :return: The signed JWT in compact form, ``header.payload.signature``.
+        :rtype: str
+        :raises IHSecretNotFound: If the secret does not exist.
+        :raises botocore.exceptions.ClientError: If Secrets Manager returns another error.
+        """
+        signed = self._sign_func(payload)
+        return signed.decode("ascii") if isinstance(signed, bytes) else signed
+
+    def _read_private_key(self) -> str:
+        """
+        Return the App's private key, reading the secret the first time.
+
+        :return: The private key in PEM format.
+        :rtype: str
+        """
+        if self.__private_key is None:
+            self.__private_key = self._secret.value
+        return self.__private_key
+
+
+class KMSSigner(JWTSigner):  # pylint: disable=too-few-public-methods
+    """
+    Signs GitHub App JWTs with ``kms:Sign``. The App's private key stays in KMS.
+
+    The KMS key must be an asymmetric key with key spec ``RSA_2048`` and key
+    usage ``SIGN_VERIFY``, whose key material is imported from the App's
+    private key. GitHub generates the App key and doesn't accept one made
+    elsewhere, so the key is imported, not created in KMS.
+
+    The caller needs ``kms:Sign`` on the key. The IAM condition
+    ``kms:SigningAlgorithm = RSASSA_PKCS1_V1_5_SHA_256`` limits the grant to
+    the one algorithm this class uses.
+
+    The KMS client is created on the first :meth:`sign` call and reused for
+    every later call on the same signer, so a warm AWS Lambda that keeps the
+    signer doesn't create a client per token. With ``role_arn``, the client
+    keeps the assumed role's temporary credentials, as other clients in this
+    library do: create a new signer when they expire.
+
+    Errors from KMS, such as ``AccessDeniedException``, ``DisabledException``
+    or ``KMSInvalidStateException``, reach the caller unchanged, as
+    :class:`botocore.exceptions.ClientError`.
+
+    :param key_id: The KMS key, in any form ``kms:Sign`` accepts: key ID, key ARN, alias name (``alias/...``) or
+        alias ARN. A key in another AWS account needs the key ARN or the alias ARN.
+    :type key_id: str
+    :param region: AWS region of the key. If omitted, uses the default region.
+    :type region: str
+    :param role_arn: IAM role ARN to assume for cross-account access.
+    :type role_arn: str
+    :param session: boto3 session to create the KMS client from, instead of ``role_arn``.
+    :type session: boto3.Session
+    """
+
+    def __init__(self, key_id: str, region: str = None, role_arn: str = None, session=None):
+        self._key_id = key_id
+        self._region = region
+        self._role_arn = role_arn
+        self._session = session
+        self.__client = None
+
+    def sign(self, payload: dict) -> str:
+        """
+        Sign a JWT payload with RS256 through ``kms:Sign``.
+
+        The signing input is ``base64url(header) + "." + base64url(payload)``,
+        both as compact JSON and base64url without padding, the same bytes that
+        PyJWT writes. PKCS#1 v1.5 signatures are deterministic, so the JWT is
+        identical to the one :class:`PEMSecretSigner` makes with the same key.
+
+        :param payload: The JWT claims: ``iat``, ``exp`` and ``iss``.
+        :type payload: dict
+        :return: The signed JWT in compact form, ``header.payload.signature``.
+        :rtype: str
+        :raises botocore.exceptions.ClientError: If KMS refuses to sign, for example
+            ``AccessDeniedException``, ``DisabledException`` or ``KMSInvalidStateException``.
+        """
+        signing_input = f"{_base64url_json(_JWT_HEADER)}.{_base64url_json(payload)}"
+        response = self._client.sign(
+            KeyId=self._key_id,
+            Message=signing_input.encode("ascii"),
+            MessageType="RAW",
+            SigningAlgorithm=_KMS_SIGNING_ALGORITHM,
+        )
+        return f"{signing_input}.{_base64url(response['Signature'])}"
+
+    @property
+    def _client(self):
+        """
+        The KMS client, created on first use.
+
+        :return: A boto3 KMS client.
+        """
+        if self.__client is None:
+            if self._session is not None:
+                self.__client = self._session.client("kms", region_name=self._region)
+            else:
+                self.__client = get_client("kms", role_arn=self._role_arn, region=self._region)
+        return self.__client
+
+
+class GitHubTokenSource(ABC):  # pylint: disable=too-few-public-methods
+    """
+    Where a caller gets GitHub App installation tokens.
+
+    Write callers against this interface rather than a concrete source. Then
+    a different source replaces the current one without changing the callers'
+    calls. :class:`GitHubAppTokenSource` mints tokens as the App. A token
+    broker, which mints tokens for its callers so they hold no App credentials
+    at all, can implement this interface later.
+    """
+
+    @abstractmethod
+    def installation_token(self, github_org_name: str, permissions: Optional[dict] = None) -> str:
+        """
+        Return an installation access token for the App's installation in an organization.
+
+        :param github_org_name: The GitHub organization the App is installed in.
+        :type github_org_name: str
+        :param permissions: The permissions the token gets, as GitHub's API names them, for example
+            ``{"organization_self_hosted_runners": "write"}``. ``None`` gets all the permissions of the
+            installation.
+        :type permissions: dict
+        :return: The installation access token. GitHub expires it after one hour.
+        :rtype: str
+        """
+
+
+class GitHubAppTokenSource(GitHubTokenSource):  # pylint: disable=too-few-public-methods
+    """
+    Mints GitHub App installation tokens as the App, with JWTs from a signer.
+
+    Every request it makes as the App carries a new JWT from ``signer``: the
+    list of the App's installations, the lookup of each organization
+    installation's account, and the token exchange. Each JWT expires
+    ``MAX_JWT_EXPIRY`` (10 minutes) after it is made.
+
+    Example::
+
+        source = GitHubAppTokenSource(
+            123456,
+            KMSSigner("arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"),
+        )
+        token = source.installation_token(
+            "my-org", permissions={"organization_self_hosted_runners": "write"}
+        )
+        github = GitHubAuth(token=token, org="my-org")
+
+    .. note::
+        This class logs no key, JWT or token. At DEBUG, the libraries under
+        it do: PyGithub logs response bodies on the ``github`` logger, the
+        installation token among them, and botocore logs them on the
+        ``botocore`` loggers, the KMS signature or the PEM secret among them.
+        Keep those loggers above DEBUG where logs are kept.
+        :func:`infrahouse_core.logging.setup_logging` keeps botocore above
+        DEBUG unless ``debug_botocore`` is set.
+
+    :param app_id: The GitHub App ID, or its client ID.
+    :type app_id: int or str
+    :param signer: Signs the App JWTs.
+    :type signer: JWTSigner
+    """
+
+    def __init__(self, app_id: Union[int, str], signer: JWTSigner):
+        self._app_id = app_id
+        self._signer = signer
+
+    def installation_token(self, github_org_name: str, permissions: Optional[dict] = None) -> str:
+        """
+        Return an installation access token for the App's installation in an organization.
+
+        The installation is the App's ``Organization`` installation whose
+        account login is ``github_org_name``. ``permissions`` reaches GitHub
+        unchanged; GitHub rejects permissions it doesn't know and permissions
+        the installation doesn't have.
+
+        :param github_org_name: The GitHub organization the App is installed in.
+        :type github_org_name: str
+        :param permissions: The permissions the token gets, as GitHub's API names them, for example
+            ``{"organization_self_hosted_runners": "write"}``. ``None`` gets all the permissions of the
+            installation.
+        :type permissions: dict
+        :return: The installation access token. GitHub expires it after one hour.
+        :rtype: str
+        :raises github.GithubException: If GitHub returns an error status when listing the App's
+            installations or exchanging the JWT for a token, for example 422 for permissions the
+            installation doesn't have. ``status`` holds the HTTP status.
+        :raises requests.HTTPError: If GitHub returns an error status when asked which account
+            an installation belongs to.
+        :raises RuntimeError: If the GitHub App has no installation in ``github_org_name``.
+        :raises botocore.exceptions.ClientError: If the signer's AWS call fails, for example
+            ``kms:Sign`` with ``AccessDeniedException``.
+        """
+        # iss must be a string: PyJWT 2.10 and later refuse to sign another type. PyGithub 2.7 and later convert
+        # the App ID themselves; 2.6 doesn't.
+        auth = AppAuth(str(self._app_id), sign_func=self._signer.sign, jwt_expiry=MAX_JWT_EXPIRY)
+        with GithubIntegration(auth=auth, base_url=_GITHUB_API_URL) as integration:
+            for installation in integration.get_installations():
+                if installation.target_type == "Organization":
+                    if github_org_name == _get_org_name(auth, installation.id):
+                        return integration.get_access_token(installation.id, permissions=permissions).token
+
+        raise RuntimeError(f"Could not find installation of {self._app_id} in organization {github_org_name}")
+
+
 def get_tmp_token(
     gh_app_id: int,
     pem_key_secret: str,
@@ -433,6 +715,11 @@ def get_tmp_token(
     Generate a temporary GitHub token from GitHUb App PEM key.
     The GitHub App must be created in your org, can be found in
     https://github.com/organizations/YOUR_ORG/settings/apps/infrahouse-github-terraform
+
+    The token has all the permissions of the App's installation. This is
+    :class:`GitHubAppTokenSource` with a :class:`PEMSecretSigner`; use those
+    directly to request fewer permissions, or :class:`KMSSigner` to keep the
+    key out of Secrets Manager.
 
     :param gh_app_id: GitHub Application identifier.
     :type gh_app_id: int
@@ -447,28 +734,45 @@ def get_tmp_token(
     :rtype: str
     :raises requests.HTTPError: If GitHub returns an error status when asked which account
         an installation belongs to.
+    :raises github.GithubException: If GitHub returns an error status when listing the App's
+        installations or exchanging the JWT for a token.
     :raises RuntimeError: If the GitHub App has no installation in ``github_org_name``.
+    :raises IHSecretNotFound: If the secret ``pem_key_secret`` does not exist.
     """
-    secret = Secret(pem_key_secret, region=region, role_arn=role_arn)
-    github_client = GithubIntegration(
-        gh_app_id,
-        secret.value,
-        jwt_expiry=MAX_JWT_EXPIRY,
-    )
-    for installation in github_client.get_installations():
-        if installation.target_type == "Organization":
-            if github_org_name == _get_org_name(github_client, installation.id):
-                return github_client.get_access_token(installation_id=installation.id).token
-
-    raise RuntimeError(f"Could not find installation of {gh_app_id} in organization {github_org_name}")
+    signer = PEMSecretSigner(pem_key_secret, region=region, role_arn=role_arn)
+    return GitHubAppTokenSource(gh_app_id, signer).installation_token(github_org_name)
 
 
-def _get_org_name(github_client: GithubIntegration, installation_id: int) -> str:
+def _base64url(data: bytes) -> str:
+    """
+    Encode bytes as base64url without padding, as JWTs use it.
+
+    :param data: The bytes to encode.
+    :type data: bytes
+    :return: The encoded string.
+    :rtype: str
+    """
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _base64url_json(value: dict) -> str:
+    """
+    Encode a dict as compact JSON in base64url without padding, as PyJWT encodes JWT headers and payloads.
+
+    :param value: The JWT header or payload.
+    :type value: dict
+    :return: The encoded segment.
+    :rtype: str
+    """
+    return _base64url(json.dumps(value, separators=(",", ":")).encode("utf-8"))
+
+
+def _get_org_name(app_auth: AppAuth, installation_id: int) -> str:
     """
     Return the login of the account a GitHub App installation belongs to.
 
-    :param github_client: GitHub App client, used to sign the request with a JWT.
-    :type github_client: GithubIntegration
+    :param app_auth: The App's authentication, used to sign the request with a JWT.
+    :type app_auth: github.Auth.AppAuth
     :param installation_id: The GitHub App installation ID.
     :type installation_id: int
     :return: The account login, for example the organization name.
@@ -478,7 +782,7 @@ def _get_org_name(github_client: GithubIntegration, installation_id: int) -> str
     url = f"{_GITHUB_API_URL}/app/installations/{installation_id}"
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {github_client.create_jwt()}",
+        "Authorization": f"Bearer {app_auth.create_jwt()}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     response = _request("GET", url, headers=headers, timeout=30)
