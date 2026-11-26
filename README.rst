@@ -71,7 +71,9 @@ GitHub Integration
 
 * **GitHubActions** - Manage self-hosted GitHub Actions runners
 * **GitHubActionsRunner** - Query runner status, labels, and metadata
-* Token generation from GitHub App credentials stored in AWS Secrets Manager
+* **GitHubAppTokenSource** - GitHub App installation tokens with only the permissions you ask for, with the App JWT
+  signed in KMS (**KMSSigner**) or with a PEM key in AWS Secrets Manager (**PEMSecretSigner**)
+* ``get_tmp_token()`` - Token generation from GitHub App credentials stored in AWS Secrets Manager
 * GitHub REST API calls retry dropped connections, 429 and 5xx responses with exponential backoff
 
 Orchestrator
@@ -218,6 +220,48 @@ GitHub Actions Runner Management
 
     # Find runners by label
     runners = actions.find_runners_by_label("self-hosted")
+
+GitHub App Installation Tokens
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``GitHubAppTokenSource`` gets an installation token for a GitHub App installed in an organization. It signs the App
+JWT with a signer. ``KMSSigner`` signs with ``kms:Sign``, so the App's private key never leaves KMS.
+``PEMSecretSigner`` reads the key from AWS Secrets Manager, as ``get_tmp_token()`` does.
+
+.. code-block:: python
+
+    from infrahouse_core.github import GitHubActions, GitHubAppTokenSource, GitHubAuth, KMSSigner
+
+    # Create the source once per process, for example at module scope in a Lambda,
+    # so that the KMS client is created once and reused.
+    source = GitHubAppTokenSource(
+        123456,  # the GitHub App ID
+        KMSSigner("arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"),
+    )
+
+    # Ask only for the permissions you need. Without permissions, the token gets all of the App's permissions.
+    token = source.installation_token("my-org", permissions={"organization_self_hosted_runners": "write"})
+    actions = GitHubActions(GitHubAuth(token=token, org="my-org"))
+
+The KMS key must have key spec ``RSA_2048`` and key usage ``SIGN_VERIFY``, with its key material imported from the
+App's private key (``Origin=EXTERNAL``). GitHub generates the App key and doesn't accept one made elsewhere, so the key
+can't be generated in KMS.
+
+The caller needs ``kms:Sign`` on the key, limited to the signing algorithm that ``KMSSigner`` uses. The key policy
+must allow it too, for example the default key policy, which delegates to IAM:
+
+.. code-block:: json
+
+    {
+        "Effect": "Allow",
+        "Action": "kms:Sign",
+        "Resource": "arn:aws:kms:us-west-2:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+        "Condition": {
+            "StringEquals": {"kms:SigningAlgorithm": "RSASSA_PKCS1_V1_5_SHA_256"}
+        }
+    }
+
+Code that takes a ``GitHubTokenSource``, the interface, works with any source, such as a token broker added later.
 
 
 Contributing
