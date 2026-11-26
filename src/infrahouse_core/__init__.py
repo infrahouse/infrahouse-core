@@ -12,4 +12,4 @@ Main modules:
 
 __author__ = """Oleksandr Kuzminskyi"""
 __email__ = "aleks@infrahouse.com"
-__version__ = "1.3.1"
+__version__ = "1.4.0"
